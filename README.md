@@ -18,8 +18,9 @@
 8. [Step 4 - Modello AI Custom](#step-4---modello-ai-custom)
 9. [Step 5 - Ottimizzazioni 1TB SSD](#step-5---ottimizzazioni-1tb-ssd)
 10. [Step 6 - Test e Validazione](#step-6---test-e-validazione)
-11. [Troubleshooting](#troubleshooting)
-12. [Struttura Progetto](#struttura-progetto)
+11. [Accesso Remoto (da reti diverse)](#accesso-remoto-da-reti-diverse)
+12. [Troubleshooting](#troubleshooting)
+13. [Struttura Progetto](#struttura-progetto)
 
 ---
 
@@ -523,6 +524,25 @@ sudo bash scripts/06-testing/01-run-tests.sh
 
 ---
 
+## Accesso Remoto (da reti diverse)
+
+Se vuoi controllare il Pi anche quando **non sei sulla stessa rete** (es. dal lavoro, da un hotel, dal telefono), vedi la guida dedicata: **[docs/ACCESSO-REMOTO.md](docs/ACCESSO-REMOTO.md)**
+
+La soluzione consigliata e' **Tailscale** (gratuito, 5 minuti di setup):
+
+```bash
+# Sul Pi (una volta):
+sudo bash scripts/07-remote-access/01-install-tailscale.sh
+
+# Sul Mac (una volta):
+bash scripts/07-remote-access/02-install-tailscale-mac.sh
+
+# Poi, da qualsiasi rete nel mondo:
+ssh piclaw-remote
+```
+
+---
+
 ## Troubleshooting
 
 Vedi [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) per la guida completa.
@@ -563,8 +583,11 @@ Raspberry_claw/
 │   │   └── 02-setup-models.sh            # Download e setup modelli
 │   ├── 05-optimization/
 │   │   └── 01-ssd-optimize.sh            # Ottimizzazioni SSD/sistema
-│   └── 06-testing/
-│       └── 01-run-tests.sh               # Suite di test completa
+│   ├── 06-testing/
+│   │   └── 01-run-tests.sh               # Suite di test completa
+│   └── 07-remote-access/                 # ← ACCESSO DA RETI DIVERSE
+│       ├── 01-install-tailscale.sh       # Tailscale sul Pi
+│       └── 02-install-tailscale-mac.sh   # Tailscale sul Mac
 ├── config/
 │   ├── systemd/
 │   │   ├── openclaw.service              # Service file OpenClaw
@@ -586,6 +609,7 @@ Raspberry_claw/
 │   └── decision_engine.py                # Engine decisionale AI
 └── docs/
     ├── SETUP-SPIEGATO.md                 # ⭐ Spiegazione semplice: a cosa servono SD e SSD
+    ├── ACCESSO-REMOTO.md                 # Guida accesso da reti diverse (Tailscale, etc.)
     ├── TROUBLESHOOTING.md                # Guida troubleshooting
     ├── HARDWARE-GUIDE.md                 # Guida hardware dettagliata
     └── AI-TUNING.md                      # Guida fine-tuning modello
