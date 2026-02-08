@@ -1,0 +1,186 @@
+# PiClaw - Definizione Tools Estesi per OpenClaw
+# Ogni tool e' accessibile dall'agente AI per operazioni autonome
+
+tools:
+  # ─── Shell Executor ────────────────────────────────────────────────────
+  - name: shell
+    description: "Esegui comandi shell con privilegi root"
+    type: "executor"
+    config:
+      interpreter: "/bin/bash"
+      timeout: 60000
+      max_output: 65536
+      environment:
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        HOME: "/root"
+        LANG: "en_US.UTF-8"
+    parameters:
+      - name: command
+        type: string
+        required: true
+        description: "Comando bash da eseguire"
+      - name: timeout
+        type: number
+        required: false
+        default: 30000
+        description: "Timeout in millisecondi"
+      - name: working_dir
+        type: string
+        required: false
+        default: "/"
+        description: "Directory di lavoro"
+
+  # ─── File Reader ───────────────────────────────────────────────────────
+  - name: read_file
+    description: "Leggi contenuto di un file"
+    type: "filesystem"
+    config:
+      max_size: "10MB"
+      encodings: ["utf-8", "ascii", "binary"]
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: "Percorso assoluto del file"
+      - name: encoding
+        type: string
+        required: false
+        default: "utf-8"
+
+  # ─── File Writer ───────────────────────────────────────────────────────
+  - name: write_file
+    description: "Scrivi contenuto su file"
+    type: "filesystem"
+    config:
+      backup: true
+      max_size: "100MB"
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: "Percorso assoluto del file"
+      - name: content
+        type: string
+        required: true
+        description: "Contenuto da scrivere"
+      - name: mode
+        type: string
+        required: false
+        default: "0644"
+        description: "Permessi file (octal)"
+      - name: append
+        type: boolean
+        required: false
+        default: false
+
+  # ─── GPIO Controller ──────────────────────────────────────────────────
+  - name: gpio
+    description: "Controlla GPIO pins del Raspberry Pi"
+    type: "hardware"
+    config:
+      backend: "sysfs"  # sysfs o gpiod
+      cleanup_on_exit: true
+    parameters:
+      - name: pin
+        type: number
+        required: true
+        description: "Numero pin BCM (2-27)"
+      - name: action
+        type: string
+        required: true
+        enum: ["export", "unexport", "direction", "read", "write"]
+        description: "Azione da eseguire"
+      - name: value
+        type: string
+        required: false
+        description: "Valore (in/out per direction, 0/1 per write)"
+
+  # ─── System Monitor ───────────────────────────────────────────────────
+  - name: system_info
+    description: "Raccogli informazioni complete sul sistema"
+    type: "monitor"
+    config:
+      cache_ttl: 5000  # Cache risultati per 5 secondi
+    parameters: []
+    returns:
+      - cpu_usage
+      - memory
+      - disk
+      - temperature
+      - uptime
+      - load_average
+
+  # ─── Service Manager ──────────────────────────────────────────────────
+  - name: service
+    description: "Gestisci servizi systemd"
+    type: "system"
+    config:
+      allowed_actions: ["start", "stop", "restart", "status", "enable", "disable"]
+    parameters:
+      - name: name
+        type: string
+        required: true
+        description: "Nome del servizio systemd"
+      - name: action
+        type: string
+        required: true
+        enum: ["start", "stop", "restart", "status", "enable", "disable"]
+
+  # ─── Network Manager ──────────────────────────────────────────────────
+  - name: network
+    description: "Gestione e diagnostica rete"
+    type: "network"
+    parameters:
+      - name: action
+        type: string
+        required: true
+        enum: ["interfaces", "connectivity", "dns", "ports", "ping", "traceroute"]
+      - name: params
+        type: object
+        required: false
+        description: "Parametri aggiuntivi (domain, host, port)"
+
+  # ─── Process Manager ──────────────────────────────────────────────────
+  - name: process
+    description: "Gestione processi di sistema"
+    type: "system"
+    parameters:
+      - name: action
+        type: string
+        required: true
+        enum: ["list", "kill", "find", "top"]
+      - name: params
+        type: object
+        required: false
+        description: "Parametri (pid, signal, name)"
+
+  # ─── GPIO Python Bridge ───────────────────────────────────────────────
+  - name: gpio_python
+    description: "Controllo avanzato GPIO via Python (PWM, I2C, SPI)"
+    type: "hardware"
+    config:
+      python_path: "/opt/openclaw/venv/bin/python3"
+      script_dir: "/opt/openclaw/tools"
+    parameters:
+      - name: script
+        type: string
+        required: true
+        description: "Nome script Python da eseguire"
+      - name: args
+        type: object
+        required: false
+        description: "Argomenti per lo script"
+
+  # ─── Docker Manager ───────────────────────────────────────────────────
+  - name: docker
+    description: "Gestione Docker containers"
+    type: "container"
+    parameters:
+      - name: action
+        type: string
+        required: true
+        enum: ["ps", "start", "stop", "restart", "logs", "pull", "run", "rm", "images"]
+      - name: params
+        type: object
+        required: false
+        description: "Parametri Docker (container, image, options)"

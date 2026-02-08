@@ -1,0 +1,87 @@
+# PiClaw OpenClaw Configuration
+# Configurazione principale dell'agente AI
+
+agent:
+  name: "PiClaw"
+  version: "1.0.0"
+  description: "Agente AI autonomo per Raspberry Pi 4"
+
+server:
+  port: 3100
+  host: "0.0.0.0"
+  cors: true
+
+ai:
+  provider: "ollama"
+  endpoint: "http://localhost:11434"
+  model: "piclaw-agent"
+  fallback_model: "llama3.2:3b"
+  options:
+    temperature: 0.3
+    num_ctx: 4096
+    num_predict: 2048
+    timeout: 120000  # 2 minuti per inference
+
+tools:
+  enabled:
+    - shell
+    - read_file
+    - write_file
+    - gpio
+    - system_info
+    - service
+    - network
+    - process
+
+  shell:
+    max_timeout: 60000
+    allowed_commands: "*"  # Accesso completo
+    environment:
+      PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  gpio:
+    pins_available: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    default_direction: "in"
+    pwm_pins: [12, 13, 18, 19]
+
+  filesystem:
+    root_access: true
+    max_file_size: "100MB"
+    allowed_paths: "/"  # Accesso completo
+
+monitoring:
+  enabled: true
+  interval: "*/5 * * * *"  # Ogni 5 minuti
+  checks:
+    - temperature
+    - memory
+    - disk
+    - services
+  thresholds:
+    temperature_warn: 70
+    temperature_critical: 80
+    memory_warn: 85
+    memory_critical: 95
+    disk_warn: 85
+    disk_critical: 95
+
+logging:
+  level: "info"
+  directory: "/data/logs/openclaw"
+  max_size: "50MB"
+  max_files: 10
+  format: "json"
+
+security:
+  # ATTENZIONE: Accesso root completo abilitato
+  # Usare solo in ambienti controllati/sicuri
+  root_access: true
+  sudo_nopasswd: true
+  hardware_access: true
+
+storage:
+  data_dir: "/data"
+  models_dir: "/data/ollama/models"
+  rag_dir: "/data/rag"
+  backups_dir: "/data/backups"
+  logs_dir: "/data/logs"
