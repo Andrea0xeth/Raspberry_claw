@@ -143,27 +143,38 @@ La microSD e' troppo lenta (25 MB/s) e piccola (32GB) per l'AI. L'SSD e' 14x piu
 ### 0.1 Flash OS sulla microSD (dal Mac)
 
 1. Scarica e installa [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-2. Inserisci la microSD nel Mac
-3. In Imager seleziona:
+2. Inserisci la microSD 32GB nel Mac
+3. Apri Raspberry Pi Imager e seleziona:
    - **Device**: Raspberry Pi 4
    - **OS**: Raspberry Pi OS (64-bit) Lite - Bookworm
    - **Storage**: la tua microSD
-4. Clicca l'**icona ingranaggio** (⚙) per le impostazioni avanzate:
+4. **PRIMA di cliccare Write**, clicca **"Edit Settings"** (o l'icona ⚙):
 
-   | Impostazione | Valore |
+   **Tab "GENERAL":**
+
+   | Impostazione | Cosa mettere |
    |---|---|
-   | Hostname | `piclaw` |
-   | Enable SSH | **Si** - Use password authentication |
-   | Username | `pi` |
-   | Password | *(scegline una sicura)* |
-   | WiFi | *(opzionale: SSID + password della tua rete)* |
-   | Locale | `Europe/Rome`, Keyboard `it` |
+   | Set hostname | `piclaw` |
+   | Set username and password | Username: `pi`, Password: *(scegline una sicura e ricordala)* |
+   | **Configure wireless LAN** | **Spunta la casella!** |
+   | SSID | **Il nome esatto della tua rete WiFi** (es. `Casa-WiFi`) |
+   | Password | **La password della tua rete WiFi** |
+   | Wireless LAN country | `IT` |
+   | Set locale settings | Timezone: `Europe/Rome`, Keyboard: `it` |
 
-5. Clicca **Write** e attendi il completamento
+   **Tab "SERVICES":**
+
+   | Impostazione | Cosa mettere |
+   |---|---|
+   | Enable SSH | **Si** - spunta "Use password authentication" |
+
+5. Clicca **Save**, poi **Write** e attendi il completamento
+
+> **Il WiFi si imposta qui**, al punto 4. RPi Imager scrive la configurazione WiFi direttamente sulla microSD cosi' il Pi si connette automaticamente alla tua rete al primo avvio. Non serve cavo Ethernet se configuri il WiFi qui.
 
 ### 0.2 Prepara SSH e chiave pubblica (dal Mac)
 
-Dopo il flash, **estrai e reinserisci** la microSD. Poi dal terminale Mac:
+Dopo il flash, **estrai e reinserisci** la microSD nel Mac. Poi dal terminale Mac:
 
 ```bash
 # Clona questo repository sul Mac
@@ -178,8 +189,10 @@ Lo script:
 - Rileva automaticamente la microSD montata (`/Volumes/bootfs`)
 - Crea il file `ssh` per abilitare SSH al primo boot
 - Copia la tua chiave pubblica SSH (`~/.ssh/id_ed25519.pub`) sulla SD
-- (Opzionale) Configura WiFi per connessione headless
+- **(Opzionale)** Se non hai configurato il WiFi in RPi Imager (Step 0.1), lo script te lo chiede qui e lo configura sulla microSD
 - Espelle la microSD in sicurezza
+
+> **WiFi**: Se lo hai gia' configurato in RPi Imager al punto 0.1, lo script ti chiede comunque ma puoi rispondere `n`. Non serve configurarlo due volte.
 
 ### 0.3 Primo boot e connessione
 

@@ -412,6 +412,47 @@ gpu_mem=16
 
 ## 7. Rete
 
+### WiFi non si connette al primo boot
+
+**Sintomo**: Hai configurato il WiFi in RPi Imager ma il Pi non si connette.
+
+```bash
+# Se hai accesso via Ethernet o monitor, controlla:
+
+# 1. Verifica che l'interfaccia WiFi esista
+ip link show wlan0
+# Se non compare: il WiFi potrebbe essere disabilitato
+
+# 2. Controlla se e' connesso
+iwconfig wlan0
+# Cerca "ESSID" - se mostra il nome della tua rete, e' connesso
+
+# 3. Verifica IP assegnato
+ip addr show wlan0
+# Cerca "inet 192.168.x.x" - se c'e', il WiFi funziona
+
+# 4. Se non connesso, prova con NetworkManager (Bookworm)
+sudo nmcli device wifi list
+# Mostra le reti disponibili. Cerca la tua.
+
+sudo nmcli device wifi connect "NOME-TUA-RETE" password "TUA-PASSWORD"
+# Connetti manualmente
+
+# 5. Se hai eseguito lo script Mac e hai il file sulla SD:
+sudo bash /boot/firmware/piclaw-network/wifi-setup.sh
+
+# 6. Verifica paese WiFi (essenziale per i canali)
+sudo raspi-config nonint get_wifi_country
+# Deve essere IT (o il tuo paese)
+sudo raspi-config nonint do_wifi_country IT
+```
+
+**Cause comuni**:
+- SSID o password scritti male in RPi Imager (attenzione a maiuscole/minuscole!)
+- Paese WiFi sbagliato (impedisce l'uso di certi canali)
+- Rete a 5GHz: il Pi 4 la supporta, ma se il segnale e' debole prova 2.4GHz
+- Rete con "spazio" nel nome: dovrebbe funzionare, ma verificare
+
 ### No internet
 
 ```bash
@@ -434,7 +475,7 @@ sudo dhcpcd eth0
 
 # 5. WiFi
 sudo iwconfig wlan0
-sudo wpa_cli status
+sudo nmcli device wifi list
 ```
 
 ### Porta bloccata da firewall
