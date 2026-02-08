@@ -66,22 +66,58 @@
 | Componente | Specifica | Note |
 |---|---|---|
 | **Raspberry Pi 4** | Model B, 8GB RAM | Essenziale per AI inference |
-| **microSD** | 32GB+ Class 10/A2 | Boot firmware + recovery |
-| **SSD NVMe/SATA** | 1TB | Samsung 980/870 EVO consigliati |
-| **Adapter USB 3.0** | UASP compatibile | RTL9210/JMicron JMS583 chipset |
+| **microSD** | 32GB Class 10/A2 | Solo per boot iniziale + firmware |
+| **SSD 1TB** | USB-C esterno o NVMe in enclosure | Tutto il software gira da qui |
+| **Adattatore USB-C → USB-A** | USB 3.0 | **Solo se** il tuo SSD ha connettore USB-C |
 | **Alimentatore** | USB-C 5V/3A (15W) | Ufficiale RPi consigliato |
 | **Dissipatore/Fan** | Attivo consigliato | AI inference genera calore |
-| **Cavo Ethernet** | Cat6 (opzionale) | Per setup headless |
+| **Cavo Ethernet** | Cat6 (consigliato) | Per primo setup headless via SSH |
+
+### Come si usano microSD e SSD insieme?
+
+> Vedi [docs/SETUP-SPIEGATO.md](docs/SETUP-SPIEGATO.md) per la spiegazione completa con diagrammi.
+
+```
+FASE 1 (setup):    microSD 32GB → flash OS, primo boot
+FASE 2 (migrazione): sistema copiato su SSD 1TB
+FASE 3 (per sempre): microSD = solo firmware boot (~50MB)
+                      SSD 1TB = TUTTO (OS, AI, dati, ~990GB liberi)
+```
+
+La microSD e' troppo lenta (25 MB/s) e piccola (32GB) per l'AI. L'SSD e' 14x piu' veloce (350 MB/s) e ha lo spazio per i modelli AI (3-5GB ciascuno).
+
+### ATTENZIONE: Porta USB-C del Pi 4
+
+```
+⚠️  La porta USB-C del Raspberry Pi 4 e' SOLO per ALIMENTAZIONE.
+    NON trasferisce dati! Non collegare l'SSD li'!
+
+    L'SSD va collegato a una porta USB 3.0 (BLU):
+
+    ┌──────────────────────────────────────────┐
+    │  [USB 2.0] [USB 2.0]  [USB 3.0] [USB 3.0]  [Ethernet]
+    │                         ^^^^^^^^  ^^^^^^^^
+    │                         BLU=dati  BLU=dati
+    │  [USB-C ⚡]
+    │   ^^^^^^^^
+    │   SOLO corrente!
+    └──────────────────────────────────────────┘
+
+    Se il tuo SSD ha connettore USB-C, ti serve un adattatore
+    USB-C (femmina) → USB-A (maschio), USB 3.0.  Costa ~5€.
+```
 
 ### Adapter USB 3.0 Consigliati (UASP)
 
 ```
-# Chipset raccomandati per NVMe-to-USB3:
-- Realtek RTL9210B     → Migliore compatibilità RPi
-- JMicron JMS583       → Ottimo, ampiamente testato
-- ASMedia ASM2362      → Buono, verificare firmware
+# Se hai un SSD esterno USB-C (es. Samsung T7):
+- Adattatore USB-C → USB-A 3.0    → ~5€ su Amazon
 
-# Per SATA-to-USB3:
+# Se hai un SSD NVMe M.2 "nudo" e un enclosure:
+- Realtek RTL9210B     → Migliore compatibilita' RPi
+- JMicron JMS583       → Ottimo, ampiamente testato
+
+# Se hai un SSD SATA 2.5":
 - ASMedia ASM1153E     → Standard affidabile
 - JMicron JMS578       → Alternativa collaudata
 
@@ -536,6 +572,7 @@ Raspberry_claw/
 │   ├── network_manager.py                # Tool gestione rete
 │   └── decision_engine.py                # Engine decisionale AI
 └── docs/
+    ├── SETUP-SPIEGATO.md                 # ⭐ Spiegazione semplice: a cosa servono SD e SSD
     ├── TROUBLESHOOTING.md                # Guida troubleshooting
     ├── HARDWARE-GUIDE.md                 # Guida hardware dettagliata
     └── AI-TUNING.md                      # Guida fine-tuning modello
