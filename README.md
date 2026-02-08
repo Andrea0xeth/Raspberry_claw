@@ -528,17 +528,28 @@ sudo bash scripts/06-testing/01-run-tests.sh
 
 Se vuoi controllare il Pi anche quando **non sei sulla stessa rete** (es. dal lavoro, da un hotel, dal telefono), vedi la guida dedicata: **[docs/ACCESSO-REMOTO.md](docs/ACCESSO-REMOTO.md)**
 
-La soluzione consigliata e' **Tailscale** (gratuito, 5 minuti di setup):
+Due opzioni:
+
+**Opzione A - NordVPN Meshnet** (se hai NordVPN, nessun costo aggiuntivo):
 
 ```bash
-# Sul Pi (una volta):
-sudo bash scripts/07-remote-access/01-install-tailscale.sh
+# Sul Pi (una volta, via SSH dalla rete locale):
+sudo bash scripts/07-remote-access/01-install-nordvpn-meshnet.sh
 
-# Sul Mac (una volta):
-bash scripts/07-remote-access/02-install-tailscale-mac.sh
+# Sul Mac: attiva Meshnet nell'app NordVPN
 
 # Poi, da qualsiasi rete nel mondo:
-ssh piclaw-remote
+ssh pi@piclaw.nord
+```
+
+**Opzione B - Port Forwarding** (senza nessun servizio esterno):
+
+```bash
+# Sul Pi:
+sudo bash scripts/07-remote-access/02-setup-port-forwarding.sh
+
+# Poi configura il router manualmente (guida nello script)
+# Dal Mac: ssh -p 2222 pi@<tuo-ip-pubblico>
 ```
 
 ---
@@ -586,8 +597,8 @@ Raspberry_claw/
 │   ├── 06-testing/
 │   │   └── 01-run-tests.sh               # Suite di test completa
 │   └── 07-remote-access/                 # ← ACCESSO DA RETI DIVERSE
-│       ├── 01-install-tailscale.sh       # Tailscale sul Pi
-│       └── 02-install-tailscale-mac.sh   # Tailscale sul Mac
+│       ├── 01-install-nordvpn-meshnet.sh # NordVPN Meshnet sul Pi
+│       └── 02-setup-port-forwarding.sh   # Port forwarding (no servizi esterni)
 ├── config/
 │   ├── systemd/
 │   │   ├── openclaw.service              # Service file OpenClaw
