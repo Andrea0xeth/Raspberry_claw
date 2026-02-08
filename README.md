@@ -7,6 +7,7 @@
 
 ## Indice
 
+0. [**Step 0 - Setup SSH dal Mac (Primo Collegamento)**](#step-0---setup-ssh-dal-mac)
 1. [Panoramica Architettura](#panoramica-architettura)
 2. [Prerequisiti Hardware](#prerequisiti-hardware)
 3. [Prerequisiti Software](#prerequisiti-software)
@@ -91,63 +92,207 @@
 
 ## Prerequisiti Software
 
-- **PC/Mac** con lettore SD e Raspberry Pi Imager
-- Accesso SSH o monitor+tastiera per setup iniziale
+- **Mac** (o PC Linux) con lettore SD e Raspberry Pi Imager
 - Connessione internet (Ethernet o WiFi)
-- Questo repository clonato
+- Questo repository clonato **sul Mac** (per gli script Step 0)
+
+> **Non serve** monitor ne' tastiera collegati al Pi. Tutto si fa via SSH dal Mac.
+
+---
+
+## Step 0 - Setup SSH dal Mac
+
+> **Questo e' il primo step da eseguire.** Prepara la microSD sul Mac e configura tutto per gestire il Pi da remoto via SSH senza mai toccare monitor o tastiera.
+
+### 0.1 Flash OS sulla microSD (dal Mac)
+
+1. Scarica e installa [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+2. Inserisci la microSD nel Mac
+3. In Imager seleziona:
+   - **Device**: Raspberry Pi 4
+   - **OS**: Raspberry Pi OS (64-bit) Lite - Bookworm
+   - **Storage**: la tua microSD
+4. Clicca l'**icona ingranaggio** (⚙) per le impostazioni avanzate:
+
+   | Impostazione | Valore |
+   |---|---|
+   | Hostname | `piclaw` |
+   | Enable SSH | **Si** - Use password authentication |
+   | Username | `pi` |
+   | Password | *(scegline una sicura)* |
+   | WiFi | *(opzionale: SSID + password della tua rete)* |
+   | Locale | `Europe/Rome`, Keyboard `it` |
+
+5. Clicca **Write** e attendi il completamento
+
+### 0.2 Prepara SSH e chiave pubblica (dal Mac)
+
+Dopo il flash, **estrai e reinserisci** la microSD. Poi dal terminale Mac:
+
+```bash
+# Clona questo repository sul Mac
+git clone https://github.com/Andrea0xeth/Raspberry_claw.git
+cd Raspberry_claw
+
+# Esegui lo script di preparazione
+bash scripts/00-mac-setup/01-prepare-sd-mac.sh
+```
+
+Lo script:
+- Rileva automaticamente la microSD montata (`/Volumes/bootfs`)
+- Crea il file `ssh` per abilitare SSH al primo boot
+- Copia la tua chiave pubblica SSH (`~/.ssh/id_ed25519.pub`) sulla SD
+- (Opzionale) Configura WiFi per connessione headless
+- Espelle la microSD in sicurezza
+
+### 0.3 Primo boot e connessione
+
+1. **Inserisci** la microSD nel Raspberry Pi 4
+2. **Collega** il cavo Ethernet al router (consigliato) oppure usa WiFi se configurato
+3. **Collega** l'alimentatore USB-C -- il Pi si accende automaticamente
+4. **Attendi 1-2 minuti** per il primo avvio completo
+
+Dal terminale Mac:
+
+```bash
+# Metodo 1: Connessione diretta (se il Mac e' sulla stessa rete)
+ssh pi@piclaw.local
+
+# Metodo 2: Usa lo script auto-discovery
+bash scripts/00-mac-setup/02-connect-ssh.sh
+
+# Metodo 3: Se conosci l'IP del Pi
+ssh pi@192.168.1.XXX
+```
+
+> **Nota**: Al primo collegamento, il terminale chiedera' di accettare la fingerprint del Pi. Digita `yes`.
+
+### 0.4 Configura SSH per accesso rapido (dal Mac)
+
+Dopo la prima connessione riuscita, configura il Mac per accesso veloce:
+
+```bash
+# Dal Mac - configura ~/.ssh/config
+bash scripts/00-mac-setup/03-setup-ssh-config.sh
+```
+
+D'ora in poi basta digitare:
+
+```bash
+ssh piclaw                          # Connetti
+ssh piclaw 'uptime'                 # Esegui comando remoto
+ssh piclaw 'vcgencmd measure_temp'  # Temperatura CPU
+ssh piclaw 'sudo reboot'            # Riavvia il Pi
+scp file.txt piclaw:~/              # Copia file sul Pi
+rsync -avz ./codice piclaw:~/       # Sync cartella
+
+# Tunnel SSH per accedere alle API dal Mac
+ssh -L 3100:localhost:3100 -L 11434:localhost:11434 piclaw
+# Poi apri: http://localhost:3100/health
+```
+
+### 0.5 Hardening SSH (dal Pi, via SSH)
+
+Una volta connesso al Pi:
+
+```bash
+sudo bash /boot/firmware/piclaw-ssh-setup.sh  # Configura chiave SSH
+# oppure, se hai clonato il repo sul Pi:
+sudo bash scripts/01-os-setup/00-configure-ssh.sh
+```
+
+Questo script:
+- Configura login con chiave pubblica (senza password)
+- Hardening: disabilita root login, limita tentativi
+- Configura fail2ban (ban dopo 5 tentativi falliti)
+- Aggiunge banner e MOTD con info sistema al login
+
+### 0.6 Trovare il Pi se `piclaw.local` non funziona
+
+```bash
+# Dal Mac: cerca Pi via MAC address nella tabella ARP
+arp -a | grep -iE 'b8:27:eb|dc:a6:32|d8:3a:dd|e4:5f:01|2c:cf:67'
+
+# Dal Mac: Bonjour discovery
+dns-sd -B _ssh._tcp
+
+# Dal Mac: ping broadcast (trova tutti i dispositivi)
+ping 224.0.0.1
+
+# Dal router: controlla la pagina DHCP leases
+
+# Dal Pi (se hai monitor temporaneo): 
+hostname -I
+```
+
+---
 
 ## Quick Start
 
 Per chi vuole il setup completo automatizzato:
 
 ```bash
+# ═══ SUL MAC ═══════════════════════════════════════════
 # 1. Flash Raspberry Pi OS 64-bit Lite su microSD con RPi Imager
-# 2. Boot, SSH nel Pi, poi:
+#    (abilita SSH + imposta user pi nelle impostazioni avanzate)
 
-git clone https://github.com/YOUR_USER/Raspberry_claw.git
+# 2. Prepara microSD per accesso SSH senza monitor
+git clone https://github.com/Andrea0xeth/Raspberry_claw.git
+cd Raspberry_claw
+bash scripts/00-mac-setup/01-prepare-sd-mac.sh
+
+# 3. Inserisci SD nel Pi, accendi, attendi 2 minuti
+
+# 4. Connetti via SSH
+bash scripts/00-mac-setup/02-connect-ssh.sh
+# oppure: ssh pi@piclaw.local
+
+# 5. Configura accesso rapido sul Mac (opzionale)
+bash scripts/00-mac-setup/03-setup-ssh-config.sh
+# D'ora in poi basta: ssh piclaw
+
+# ═══ SUL PI (via SSH) ══════════════════════════════════
+# 6. Setup completo (eseguire in ordine)
+git clone https://github.com/Andrea0xeth/Raspberry_claw.git
 cd Raspberry_claw
 
-# 3. Setup completo (eseguire in ordine)
-sudo bash scripts/01-os-setup/01-initial-setup.sh
-sudo bash scripts/02-ssd-boot/01-prepare-ssd.sh
-# === REBOOT dal SSD ===
-sudo bash scripts/02-ssd-boot/02-post-ssd-boot.sh
-sudo bash scripts/03-openclaw/01-install-openclaw.sh
-sudo bash scripts/04-ai-engine/01-install-ollama.sh
-sudo bash scripts/04-ai-engine/02-setup-models.sh
-sudo bash scripts/05-optimization/01-ssd-optimize.sh
-sudo bash scripts/06-testing/01-run-tests.sh
+sudo bash scripts/01-os-setup/00-configure-ssh.sh    # Hardening SSH
+sudo bash scripts/01-os-setup/01-initial-setup.sh     # Setup OS
+sudo bash scripts/02-ssd-boot/01-prepare-ssd.sh       # Prepara SSD
+# === REBOOT (il Pi riavvia da SSD) ===
+sudo bash scripts/02-ssd-boot/02-post-ssd-boot.sh     # Verifica SSD
+sudo bash scripts/03-openclaw/01-install-openclaw.sh   # OpenClaw
+sudo bash scripts/04-ai-engine/01-install-ollama.sh    # Ollama
+sudo bash scripts/04-ai-engine/02-setup-models.sh      # Modelli AI
+sudo bash scripts/05-optimization/01-ssd-optimize.sh   # Ottimizzazioni
+sudo bash scripts/06-testing/01-run-tests.sh           # Test
 ```
 
 ---
 
 ## Step 1 - Installazione OS e Boot da SSD
 
-### 1.1 Flash microSD
+### 1.1 Flash microSD e Primo Collegamento SSH
 
-Su PC/Mac:
+> Se hai gia' completato lo [Step 0](#step-0---setup-ssh-dal-mac), la microSD e' gia' pronta e sei connesso via SSH. Passa direttamente al punto 1.2.
 
-1. Scarica [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-2. Seleziona **Raspberry Pi OS (64-bit) Lite** (Bookworm)
-3. Configura:
-   - Hostname: `piclaw`
-   - SSH: Abilita con password o chiave pubblica
-   - User: `pi` / password sicura
-   - WiFi (opzionale): SSID + password
-   - Locale: IT / Timezone Europe/Rome
-4. Flash su microSD
+Se non hai eseguito lo Step 0:
+1. Segui le istruzioni in [Step 0.1](#01-flash-os-sulla-microsd-dal-mac) per flashare la microSD
+2. Segui [Step 0.3](#03-primo-boot-e-connessione) per la prima connessione SSH
 
-### 1.2 Primo Boot e Setup Base
+### 1.2 Setup Base (via SSH dal Mac)
 
 ```bash
-# SSH nel Pi
-ssh pi@piclaw.local
-# oppure
-ssh pi@<IP_ADDRESS>
+# Dal Mac: connettiti al Pi
+ssh piclaw
+# oppure: ssh pi@piclaw.local
 
-# Clona questo repository
-git clone https://github.com/YOUR_USER/Raspberry_claw.git
+# Sul Pi: clona il repository
+git clone https://github.com/Andrea0xeth/Raspberry_claw.git
 cd Raspberry_claw
+
+# Opzionale: configura e hardening SSH
+sudo bash scripts/01-os-setup/00-configure-ssh.sh
 
 # Esegui setup iniziale
 sudo bash scripts/01-os-setup/01-initial-setup.sh
@@ -352,7 +497,12 @@ Vedi [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) per la guida completa.
 Raspberry_claw/
 ├── README.md                              # Questa guida
 ├── scripts/
-│   ├── 01-os-setup/
+│   ├── 00-mac-setup/                     # ← ESEGUIRE SUL MAC
+│   │   ├── 01-prepare-sd-mac.sh          # Prepara microSD con SSH+WiFi+chiave
+│   │   ├── 02-connect-ssh.sh             # Auto-discovery e connessione al Pi
+│   │   └── 03-setup-ssh-config.sh        # Config ~/.ssh/config per "ssh piclaw"
+│   ├── 01-os-setup/                      # ← ESEGUIRE SUL PI (via SSH)
+│   │   ├── 00-configure-ssh.sh           # Hardening SSH + fail2ban + MOTD
 │   │   └── 01-initial-setup.sh           # Setup iniziale OS
 │   ├── 02-ssd-boot/
 │   │   ├── 01-prepare-ssd.sh             # Preparazione e clone SSD
@@ -361,7 +511,7 @@ Raspberry_claw/
 │   │   └── 01-install-openclaw.sh        # Installazione OpenClaw
 │   ├── 04-ai-engine/
 │   │   ├── 01-install-ollama.sh          # Installazione Ollama
-│   │   └── 02-setup-models.sh           # Download e setup modelli
+│   │   └── 02-setup-models.sh            # Download e setup modelli
 │   ├── 05-optimization/
 │   │   └── 01-ssd-optimize.sh            # Ottimizzazioni SSD/sistema
 │   └── 06-testing/
