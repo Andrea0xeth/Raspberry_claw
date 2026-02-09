@@ -1,0 +1,45 @@
+# /etc/sudoers.d/openclaw
+# OpenClaw AI Agent - Accesso root COMPLETO senza password
+#
+# ATTENZIONE: Questo file da' accesso root completo all'agente AI.
+# Assicurarsi che il sistema sia in un ambiente sicuro e controllato.
+#
+# Installare con:
+#   sudo cp config/sudoers/openclaw /etc/sudoers.d/openclaw
+#   sudo chmod 440 /etc/sudoers.d/openclaw
+#   sudo visudo -c -f /etc/sudoers.d/openclaw
+
+# ═══════════════════════════════════════════════════════════════════════
+# OPZIONE 1: Accesso COMPLETO (default per PiClaw)
+# ═══════════════════════════════════════════════════════════════════════
+openclaw ALL=(ALL:ALL) NOPASSWD: ALL
+
+# ═══════════════════════════════════════════════════════════════════════
+# OPZIONE 2: Accesso LIMITATO (piu' sicuro, decommentare se preferito)
+# Commentare la riga ALL sopra e decommentare le righe sotto
+# ═══════════════════════════════════════════════════════════════════════
+
+# Gestione servizi
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl start *, /usr/bin/systemctl stop *, /usr/bin/systemctl restart *, /usr/bin/systemctl status *
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/journalctl
+
+# Sistema
+# openclaw ALL=(ALL) NOPASSWD: /usr/sbin/reboot, /usr/sbin/shutdown, /usr/sbin/poweroff
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/apt-get update, /usr/bin/apt-get install *, /usr/bin/apt-get upgrade
+
+# Hardware
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/i2cdetect, /usr/bin/i2cget, /usr/bin/i2cset, /usr/bin/i2cdump
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/gpioinfo, /usr/bin/gpioget, /usr/bin/gpioset
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/class/gpio/*
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/pinctrl
+
+# Docker
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/docker
+
+# Rete
+# openclaw ALL=(ALL) NOPASSWD: /bin/ip, /usr/sbin/iptables, /usr/sbin/ufw
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/nmcli
+
+# File system (operazioni specifiche)
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/mount, /usr/bin/umount
+# openclaw ALL=(ALL) NOPASSWD: /usr/bin/chmod, /usr/bin/chown

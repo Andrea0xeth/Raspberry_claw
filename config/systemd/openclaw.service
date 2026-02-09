@@ -1,0 +1,43 @@
+[Unit]
+Description=PiClaw OpenClaw AI Agent
+Documentation=https://github.com/YOUR_USER/Raspberry_claw
+After=network-online.target ollama.service
+Wants=network-online.target ollama.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/openclaw/src
+EnvironmentFile=/opt/openclaw/config/.env
+ExecStart=/usr/bin/node /opt/openclaw/src/index.js
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Limiti risorse
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Timeout
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw
+
+# Security (accesso completo, ma con audit)
+AmbientCapabilities=CAP_SYS_RAWIO CAP_SYS_ADMIN CAP_NET_ADMIN CAP_NET_RAW CAP_DAC_OVERRIDE
+CapabilityBoundingSet=~
+ProtectClock=no
+ProtectKernelModules=no
+ProtectKernelTunables=no
+
+[Install]
+WantedBy=multi-user.target
