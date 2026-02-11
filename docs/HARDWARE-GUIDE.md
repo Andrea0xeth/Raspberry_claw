@@ -6,7 +6,7 @@
 |---|---|
 | **SoC** | Broadcom BCM2711 |
 | **CPU** | Quad-core Cortex-A72 (ARM v8) 64-bit @ 1.8 GHz |
-| **RAM** | 8 GB LPDDR4-3200 SDRAM |
+| **RAM** | 4 GB LPDDR4-3200 SDRAM |
 | **GPU** | VideoCore VI (OpenGL ES 3.1, Vulkan 1.0) |
 | **USB** | 2x USB 3.0, 2x USB 2.0 |
 | **Ethernet** | Gigabit Ethernet (reale, non via USB) |
@@ -164,7 +164,7 @@ while True:
 
 ```
 ┌─────────────────────────────────────────────┐
-│              RASPBERRY PI 4 8GB              │
+│              RASPBERRY PI 4 4GB              │
 │                                              │
 │  microSD ─── Boot firmware                   │
 │                                              │

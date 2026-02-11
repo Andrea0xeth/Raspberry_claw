@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenClaw Agent 3 (Executor - Factor MCP + wallet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/openclaw/src
+Environment=OPENCLAW_ROOT=/opt/openclaw-agent3
+Environment=OPENCLAW_PORT=3102
+Environment=OPENCLAW_AGENT_ROLE=executor
+Environment=OPENCLAW_AGENT_LABEL=Executor
+Environment=FACTOR_MCP_PATH=/opt/openclaw/factor-mcp/dist/index.js
+ExecStart=/usr/bin/node /opt/openclaw/src/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-agent3
+
+[Install]
+WantedBy=multi-user.target

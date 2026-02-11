@@ -496,9 +496,15 @@ const engine = new DecisionEngine();
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Health check
+// Health check (online/ready per dashboard e client che mostrano stato agente)
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', agent: 'piclaw', uptime: process.uptime() });
+    res.json({
+        status: 'ok',
+        agent: 'piclaw',
+        online: true,
+        ready: true,
+        uptime: process.uptime()
+    });
 });
 
 // Esegui tool direttamente

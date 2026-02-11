@@ -159,7 +159,7 @@ Assicurati che sia **USB 3.0/3.1** (non USB 2.0, sarebbe troppo lento).
 
 | Cosa | Ce l'hai? | Note |
 |---|---|---|
-| Raspberry Pi 4 (8GB) | ✅ | |
+| Raspberry Pi 4 (4GB) | ✅ | |
 | microSD 32GB | ✅ | Per flash OS iniziale |
 | SSD 1TB (USB-C) | ✅ | Per OS + AI + dati |
 | Adattatore USB-C → USB-A | ❓ | **Verifica!** Serve se il SSD ha solo USB-C |

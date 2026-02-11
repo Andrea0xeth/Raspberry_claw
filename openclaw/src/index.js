@@ -12,12 +12,13 @@ import crypto from "crypto";
 import axios from "axios";
 import { createLogger, format, transports } from "winston";
 import { fileURLToPath } from "url";
+import { startCronJobs } from "./cron-jobs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = path.join(__dirname, "..", "skills");
+const OPENCLAW_ROOT = path.resolve(process.env.OPENCLAW_ROOT || "/opt/openclaw");
 
 // ─── Config ─────────────────────────────────────────────────────────────────
-const OAUTH_TOKEN_FILE = "/opt/openclaw/.minimax_oauth.json";
+const OAUTH_TOKEN_FILE = path.join(OPENCLAW_ROOT, ".minimax_oauth.json");
 const MINIMAX_CLIENT_ID = "78257093-7e40-4613-99e0-527b14b39113";
 const MINIMAX_OAUTH_SCOPE = "group_id profile model.completion";
 const MINIMAX_BASE_URL = "https://api.minimax.io";
@@ -26,11 +27,11 @@ let _oauthTokens = null;
 try { _oauthTokens = JSON.parse(await fs.readFile(OAUTH_TOKEN_FILE, "utf8")); } catch {}
 
 let _minimaxKey = process.env.MINIMAX_API_KEY || "";
-try { const k = (await fs.readFile("/opt/openclaw/.minimax_key", "utf8")).trim(); if (k) _minimaxKey = k; } catch {}
+try { const k = (await fs.readFile(path.join(OPENCLAW_ROOT, ".minimax_key"), "utf8")).trim(); if (k) _minimaxKey = k; } catch {}
 
-const AI_PROVIDER_FILE = "/opt/openclaw/.ai_provider";
+const AI_PROVIDER_FILE = path.join(OPENCLAW_ROOT, ".ai_provider");
 let _openrouterKey = process.env.OPENROUTER_API_KEY || "";
-try { const k = (await fs.readFile("/opt/openclaw/.openrouter_key", "utf8")).trim(); if (k) _openrouterKey = k; } catch {}
+try { const k = (await fs.readFile(path.join(OPENCLAW_ROOT, ".openrouter_key"), "utf8")).trim(); if (k) _openrouterKey = k; } catch {}
 
 async function getAiProvider() {
     try { return (await fs.readFile(AI_PROVIDER_FILE, "utf8")).trim().toLowerCase() || "minimax"; } catch {}
@@ -43,18 +44,28 @@ async function setAiProvider(provider) {
     return p;
 }
 
+const OPENROUTER_MODEL_FILE = path.join(OPENCLAW_ROOT, ".openrouter_model");
+let _openrouterModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+try { const m = (await fs.readFile(OPENROUTER_MODEL_FILE, "utf8")).trim(); if (m) _openrouterModel = m; } catch {}
+
+const SKILLS_DIR = path.join(OPENCLAW_ROOT, "skills");
+
 const CONFIG = {
     port: parseInt(process.env.OPENCLAW_PORT || "3100"),
     minimaxModel: process.env.MINIMAX_MODEL || "MiniMax-M2.1",
     minimaxUrl: `${MINIMAX_BASE_URL}/anthropic/v1/messages`,
     openrouterUrl: process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
-    openrouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-    factorMcpPath: process.env.FACTOR_MCP_PATH || "/opt/openclaw/factor-mcp/dist/index.js",
-    logDir: process.env.LOG_DIR || "/data/logs/openclaw",
+    get openrouterModel() { return _openrouterModel; },
+    set openrouterModel(v) { _openrouterModel = v || _openrouterModel; },
+    factorMcpPath: process.env.FACTOR_MCP_PATH || path.join(OPENCLAW_ROOT, "factor-mcp", "dist", "index.js"),
+    logDir: process.env.LOG_DIR || path.join(OPENCLAW_ROOT, "logs"),
 };
 
 // ─── Logger ─────────────────────────────────────────────────────────────────
+const MEMORY_DIR = path.join(OPENCLAW_ROOT, "memory");
 await fs.mkdir(CONFIG.logDir, { recursive: true });
+await fs.mkdir(SKILLS_DIR, { recursive: true });
+await fs.mkdir(MEMORY_DIR, { recursive: true });
 
 const logger = createLogger({
     level: "info",
@@ -225,6 +236,9 @@ async function loadSkills() {
     }
 }
 
+const AGENT_ROLE = (process.env.OPENCLAW_AGENT_ROLE || "").toLowerCase();
+const AGENT_LABEL = process.env.OPENCLAW_AGENT_LABEL || (AGENT_ROLE ? AGENT_ROLE.replace(/-/g, " ") : "0xpiclaw.eth");
+
 const BASE_PROMPT = `You are 0xpiclaw.eth, a DeFi agent on a Raspberry Pi 4. You speak English.
 Your wallet: 0x8Ac130E606545aD94E26fCF09CcDd950A981A704. Chains: ARBITRUM_ONE, BASE, MAINNET.
 
@@ -237,16 +251,63 @@ To call a tool use exactly: [TOOL_CALL:toolName:jsonObject]
 - For real-time DeFi yield by chain/asset/protocol: yield_opportunities (chain?, symbol?, project?, stablecoinOnly?, minTvlUsd?, limit?). Use project for protocol (e.g. aave-v3, compound-v3). Data from DefiLlama Yields.
 `;
 
-let SYSTEM_PROMPT = BASE_PROMPT;
+const AGENT_ROLE_PROMPTS = {
+    orchestrator: `You are the Orchestrator agent. You speak English. You run every 30 minutes to coordinate the other agents.
+
+Memory: Use read_memory({ "date": "YYYY-MM-DD" }) to read today or yesterday (memory/). Use append_memory({ "content": "short note" }) to record significant outcomes so future runs have context. Text over brain — write it down.
+
+Your jobs:
+1. Check vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc (Factor Pro on Arbitrum): use factor_get_vault_info, factor_get_shares, factor_get_executions to monitor its state.
+2. Trigger the DeFi Expert (agent on port 3101): use call_agent with port 3101 and a message containing the vault address, chain, current assets and positions so they can propose a yield-maximizing strategy based on Factor strategies skills.
+3. Trigger the Executor (agent on port 3102): use call_agent with port 3102 and the strategy or actions. The Executor must always execute real transactions (validate with simulate, then always broadcast). No human approval required.
+4. Optionally trigger the System Improver (agent on port 3103): use call_agent with port 3103 to ask for system health checks and improvement suggestions.
+
+Always use post_to_discord to report: when you start a cycle, when you get results from each agent, and a detailed summary at the end. Write as much info as you can: vault state, strategy proposed, execution steps, tx hashes, errors. Use append_memory to record full cycle outcomes for future runs.
+
+On heartbeat (POST /heartbeat): you receive HEARTBEAT.md checklist. Follow it; if nothing needs attention reply exactly HEARTBEAT_OK.
+
+Tool usage: [TOOL_CALL:toolName:jsonObject]. You have: factor_*, yield_opportunities, shell, list_skills, read_memory, append_memory, call_agent, post_to_discord.`,
+
+    "defi-expert": `You are the DeFi Expert agent. You speak English. You are triggered by the Orchestrator.
+
+Memory: Use read_memory and append_memory for today's date to keep context across runs. Write significant strategy decisions or errors.
+
+Your role: You know DeFi protocols, their APIs, and Factor Protocol (Studio Pro vaults, strategies, adapters). Given a vault address, its chain, assets and current positions, you propose a new strategy that maximizes APY. Use the Factor strategies skill: canvas steps (LEND, BORROW, SWAP, REPAY, WITHDRAW_LENDING, etc.), factory whitelisted adapters and assets. You do NOT execute transactions or use the wallet; you only analyze and output a clear strategy (steps, parameters) for the Executor to run.
+
+When the Orchestrator sends you a message, use factor_get_vault_info, factor_get_factory_addresses, yield_opportunities as needed. Reply with a concrete strategy description (steps, protocols, amounts, APY). Use post_to_discord with as much detail as you can: strategy steps, recommended amounts, protocols, expected APY. Use append_memory to record strategy decisions. On heartbeat (HEARTBEAT.md): if nothing to do, reply exactly HEARTBEAT_OK.
+
+Tool usage: [TOOL_CALL:toolName:jsonObject]. You have: factor_get_vault_info, factor_get_factory_addresses, factor_list_adapters, factor_list_building_blocks, yield_opportunities, list_skills, read_memory, append_memory, post_to_discord. No factor_execute_*, no wallet.`,
+
+    executor: `You are the Executor agent. You speak English. You are triggered by the Orchestrator.
+
+Memory: Use append_memory to record execution outcomes (success/failure, tx hash if any). Use read_memory for recent context.
+
+Your role: You compile transactions and use the wallet via Factor MCP. You receive a strategy (from the DeFi Expert or Orchestrator) and you MUST always execute real transactions. Use factor_simulate_strategy only to validate; then ALWAYS call factor_execute_strategy or factor_execute_manager to broadcast real transactions. Never only simulate and stop — always execute. No human approval required. Write as much info as you can: post_to_discord with detailed summaries (steps, amounts, tx hashes, outcomes), append_memory with full execution results and any errors. On heartbeat: reply HEARTBEAT_OK if nothing to do.
+
+Tool usage: [TOOL_CALL:toolName:jsonObject]. You have: all factor_* tools, shell, read_memory, append_memory, post_to_discord.`,
+
+    "system-improver": `You are the System Improver agent. You speak English. You are triggered by the Orchestrator (or run periodically).
+
+Memory: Use read_memory and append_memory. Record findings, errors, and improvements so you don't repeat work.
+
+Your role: You improve the overall system of the four agents. You have full access: sudo, systemctl, all files and logs on the Pi. You manage operations via the OpenClaw CLI when installed: use the shell tool to run openclaw health, openclaw status, openclaw gateway status, openclaw cron list, openclaw channels status, openclaw logs, openclaw doctor (see skill openclaw-cli.md). When the CLI is not installed, use curl for our agent APIs (e.g. curl http://127.0.0.1:3100/health) and systemctl for openclaw, openclaw-agent2, openclaw-agent3, openclaw-agent4. Read logs (journalctl -u openclaw, /data/logs/openclaw, syslog), check CPU/memory/disk (shell), suggest or apply improvements. Use post_to_discord to report findings with as much detail as you can: metrics, errors, recommendations. Use append_memory for significant findings. On heartbeat (HEARTBEAT.md): rotate through checks (load, disk, recent errors, optionally openclaw status); if nothing needs action reply HEARTBEAT_OK.
+
+Tool usage: [TOOL_CALL:toolName:jsonObject]. You have: shell (sudo when needed), list_skills, add_skill, add_skill_from_path, add_skill_from_url, reload_skills, read_memory, append_memory, post_to_discord. Prefer safe, reversible changes.`
+};
+
+const ROLE_BASE = AGENT_ROLE && AGENT_ROLE_PROMPTS[AGENT_ROLE] ? AGENT_ROLE_PROMPTS[AGENT_ROLE] : BASE_PROMPT;
+
+let SYSTEM_PROMPT = ROLE_BASE;
 try {
     const skillText = await loadSkills();
     if (skillText) {
-        SYSTEM_PROMPT = BASE_PROMPT + "\n\n" + skillText;
+        SYSTEM_PROMPT = ROLE_BASE + "\n\n" + skillText;
         logger.info("[SKILLS] Loaded skills from " + SKILLS_DIR);
     }
 } catch (e) {
     logger.warn("[SKILLS] Load failed: " + e.message);
 }
+if (AGENT_ROLE) logger.info("[AGENT] role=" + AGENT_ROLE + " label=" + AGENT_LABEL);
 
 // ─── AI Engine (MiniMax) ────────────────────────────────────────────────────
 class AIEngine {
@@ -300,7 +361,7 @@ class AIEngine {
     }
 
     async callOpenRouter(systemPrompt, messages, retries = 1) {
-        if (!_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or create /opt/openclaw/.openrouter_key");
+        if (!_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or create " + path.join(OPENCLAW_ROOT, ".openrouter_key"));
         const openRouterMessages = [{ role: "system", content: systemPrompt }, ...messages];
         const body = {
             model: CONFIG.openrouterModel,
@@ -346,7 +407,7 @@ class AIEngine {
         const provider = await getAiProvider();
         const needsMinimax = provider === "minimax";
         if (needsMinimax && !MiniMaxOAuth.getBearer()) throw new Error("Not authenticated. Use /auth/minimax");
-        if (provider === "openrouter" && !_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or add /opt/openclaw/.openrouter_key");
+        if (provider === "openrouter" && !_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or add " + path.join(OPENCLAW_ROOT, ".openrouter_key"));
         this.addMessage(chatId, "user", message);
         const history = this.getHistory(chatId);
         logger.info(`[AI] Chat [${chatId}] (${provider}): "${message}" (${history.length} msgs)`);
@@ -497,16 +558,17 @@ const factorBridge = new FactorMCPBridge(CONFIG.factorMcpPath);
 const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1470438238039703667/RjSMg_d7hrsoN_Noe8SybysQkEG6CKocm6ZvBXVgRqTbiKK2jO2pSPWDiotFoalpDgck";
 const DISCORD_THREAD_ID = "1470412059429699738";
 
-async function sendDiscordMessage(content) {
+async function sendDiscordMessage(content, username = null) {
     if (!DISCORD_WEBHOOK_URL) return false;
+    const name = username || AGENT_LABEL;
     try {
         const resp = await fetch(`${DISCORD_WEBHOOK_URL}?thread_id=${DISCORD_THREAD_ID}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: content.substring(0, 2000), username: "0xpiclaw.eth" }),
+            body: JSON.stringify({ content: content.substring(0, 2000), username: name }),
         });
         if (!resp.ok) { logger.warn(`[DISCORD] ${resp.status}`); return false; }
-        logger.info("[DISCORD] message sent");
+        logger.info("[DISCORD] message sent as " + name);
         return true;
     } catch (e) { logger.warn(`[DISCORD] ${e.message}`); return false; }
 }
@@ -520,6 +582,62 @@ tools.factor = async ({ tool, params = {} }) => {
         return result;
     } catch (e) { return { error: e.message }; }
 };
+
+// All agents: post to shared Discord (thread). Params: { message }.
+tools.post_to_discord = async ({ message }) => {
+    if (!message || typeof message !== "string") return { error: "message (string) required" };
+    const ok = await sendDiscordMessage(`[${AGENT_LABEL}] ${message}`, AGENT_LABEL);
+    return { success: ok };
+};
+
+// Memory (OpenClaw-style: daily notes, long-term). Path: OPENCLAW_ROOT/memory/
+function todayStr() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+tools.read_memory = async ({ date }) => {
+    const d = date || todayStr();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { error: "date must be YYYY-MM-DD" };
+    try {
+        const content = await fs.readFile(path.join(MEMORY_DIR, d + ".md"), "utf8");
+        return { date: d, content };
+    } catch (e) {
+        if (e.code === "ENOENT") return { date: d, content: "" };
+        return { error: e.message };
+    }
+};
+tools.append_memory = async ({ content, date }) => {
+    if (!content || typeof content !== "string") return { error: "content (string) required" };
+    const d = date || todayStr();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { error: "date must be YYYY-MM-DD" };
+    try {
+        const f = path.join(MEMORY_DIR, d + ".md");
+        const existing = await fs.readFile(f, "utf8").catch(() => "");
+        const line = "[" + new Date().toISOString() + "] " + content.replace(/\n/g, " ") + "\n";
+        await fs.writeFile(f, existing + line, "utf8");
+        return { success: true, date: d };
+    } catch (e) {
+        return { error: e.message };
+    }
+};
+
+// Orchestrator only: call another agent by port. Params: { port: 3101|3102|3103, message }.
+if (AGENT_ROLE === "orchestrator") {
+    tools.call_agent = async ({ port, message }) => {
+        if (!port || !message) return { error: "port (3101|3102|3103) and message required" };
+        const p = Number(port);
+        if (![3101, 3102, 3103].includes(p)) return { error: "port must be 3101, 3102, or 3103" };
+        try {
+            const resp = await fetch(`http://127.0.0.1:${p}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, chatId: `orchestrator-${Date.now()}` }),
+            });
+            const data = await resp.json();
+            if (appendAgentJournal) await appendAgentJournal({ type: "tool_call", name: "call_agent", result: JSON.stringify({ port: p, response: data.response || data.error }) });
+            return data.response ? { response: data.response, success: data.success } : { error: data.error || "No response" };
+        } catch (e) {
+            return { error: e.message };
+        }
+    };
+}
 
 // Shell tool: run a command on the Pi (runs as same user as OpenClaw, e.g. openclaw)
 tools.shell = async ({ command, timeout = 30000 }) => {
@@ -600,6 +718,7 @@ tools.list_skills = async ({ includeContent = false, previewLines = 0 } = {}) =>
 };
 
 const SKILL_IMPORT_ALLOWED_ROOTS = [
+    OPENCLAW_ROOT,
     path.resolve("/opt/openclaw"),
     path.resolve("/data"),
     path.resolve("/home/openclaw"),
@@ -613,11 +732,11 @@ function resolveSkillPathAllowed(fullPath) {
     return null;
 }
 
-// Import a skill from a file path on the Pi (allowed: /opt/openclaw, /data, /home/openclaw, /home/pi).
+// Import a skill from a file path on the Pi (allowed: OPENCLAW_ROOT, /opt/openclaw, /data, /home/openclaw, /home/pi).
 tools.add_skill_from_path = async ({ path: filePath, filename: asFilename }) => {
     if (!filePath || typeof filePath !== "string") return { error: "path (string) required" };
     const resolved = resolveSkillPathAllowed(filePath);
-    if (!resolved) return { error: "Path not allowed (use a path under /opt/openclaw, /data, /home/openclaw, /home/pi)" };
+    if (!resolved) return { error: "Path not allowed (use a path under OPENCLAW_ROOT, /opt/openclaw, /data, /home/openclaw, /home/pi)" };
     try {
         const stat = await fs.stat(resolved);
         if (!stat.isFile()) return { error: "Not a file" };
@@ -748,6 +867,31 @@ app.get("/", (req, res) => {
     res.json({ agent: "0xpiclaw.eth", dashboard: "/dashboard" });
 });
 
+// Heartbeat — GET = health ping; POST = proactive turn (read HEARTBEAT.md, follow checklist, reply HEARTBEAT_OK if nothing)
+const HEARTBEAT_PROMPT = "Read the checklist below. Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply exactly HEARTBEAT_OK.";
+app.get("/heartbeat", (req, res) => {
+    res.json({ status: "ok", agent: "0xpiclaw.eth", role: AGENT_ROLE || null, ts: new Date().toISOString() });
+});
+app.get("/HEARTBEAT", (req, res) => {
+    res.json({ status: "ok", agent: "0xpiclaw.eth", role: AGENT_ROLE || null, ts: new Date().toISOString() });
+});
+app.post("/heartbeat", async (req, res) => {
+    const customMessage = req.body?.message;
+    let prompt = customMessage || HEARTBEAT_PROMPT;
+    try {
+        const heartbeatPath = path.join(OPENCLAW_ROOT, "HEARTBEAT.md");
+        const checklist = await fs.readFile(heartbeatPath, "utf8").catch(() => "");
+        if (checklist.trim()) {
+            prompt = "HEARTBEAT.md checklist:\n---\n" + checklist.trim() + "\n---\n" + (customMessage || HEARTBEAT_PROMPT);
+        }
+        const result = await ai.chat(prompt, "heartbeat-" + Date.now(), SYSTEM_PROMPT, { maxRounds: 5 });
+        const isOk = /HEARTBEAT_OK/i.test(result.response || "");
+        res.json({ success: true, response: result.response, heartbeatOk: isOk });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Health
 app.get("/health", async (req, res) => {
     const provider = await getAiProvider();
@@ -756,6 +900,7 @@ app.get("/health", async (req, res) => {
         agent: "0xpiclaw.eth",
         version: "2.0.0",
         uptime: process.uptime(),
+        openclawRoot: OPENCLAW_ROOT,
         aiProvider: provider,
         model: provider === "openrouter" ? CONFIG.openrouterModel : CONFIG.minimaxModel,
         auth: { oauth: MiniMaxOAuth.hasOAuth(), expired: MiniMaxOAuth.hasOAuth() ? MiniMaxOAuth.isExpired() : null, fallbackKey: !!_minimaxKey },
@@ -815,9 +960,14 @@ app.post("/chat", async (req, res) => {
         if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "user", content: message });
         const result = await ai.chat(message, chatId);
         if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "assistant", content: result.response, reasoning: result.reasoning, tokens: result.tokens });
+        if (result.response && AGENT_LABEL && !(chatId === "heartbeat" || chatId.startsWith("heartbeat-"))) {
+            const excerpt = result.response.length > 400 ? result.response.substring(0, 397) + "..." : result.response;
+            sendDiscordMessage(`[${AGENT_LABEL}] ${excerpt}`, AGENT_LABEL).catch(() => {});
+        }
         res.json(result);
     } catch (e) {
         if (appendAgentJournal) await appendAgentJournal({ type: "error", message: e.message });
+        if (AGENT_LABEL) sendDiscordMessage(`[${AGENT_LABEL}] Error: ${e.message}`, AGENT_LABEL).catch(() => {});
         res.status(e.response?.status || 500).json({ success: false, error: e.message });
     }
 });
@@ -862,6 +1012,32 @@ app.post("/cron/yield-optimize", async (req, res) => {
     }
 });
 
+// Orchestrator: 30-min cycle (check vault, trigger DeFi expert, Executor, System improver). Only when this instance is the orchestrator.
+const ORCHESTRATE_PROMPT = `Run your 30-minute cycle now. Write as much info as you can to Discord and memory.
+1. Post to Discord: "Orchestrator: Starting 30min cycle." and append_memory with cycle start.
+2. Check vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc (factor_get_vault_info, factor_get_shares). Post a detailed summary to Discord (TVL, shares, assets, PPS, any positions).
+3. Call the DeFi Expert (port 3101): send vault address, chain Arbitrum, current state; ask for a yield-maximizing strategy. Post their full strategy summary to Discord (steps, protocols, amounts, APY).
+4. Call the Executor (port 3102): send the strategy. The Executor must always execute real transactions (simulate to validate, then always broadcast). Post a detailed result to Discord (steps run, amounts, tx hashes, success/failure, errors if any). Append to memory the execution outcome.
+5. Call the System Improver (port 3103): ask for system health (CPU, memory, disk, logs). Post their detailed findings to Discord.
+6. Post to Discord: "Orchestrator: Cycle complete." with a detailed overall summary (vault state, what was executed, any issues). Append to memory the cycle result.`;
+
+app.post("/cron/orchestrate", async (req, res) => {
+    if (AGENT_ROLE !== "orchestrator") return res.status(404).json({ error: "Not the orchestrator" });
+    const auth = req.headers.authorization;
+    const token = auth && auth.startsWith("Bearer ") ? auth.slice(7) : (req.body?.secret || req.query?.secret);
+    if (CRON_SECRET && token !== CRON_SECRET) return res.status(401).json({ error: "Unauthorized" });
+    const chatId = "cron-orchestrate-" + Date.now();
+    try {
+        logger.info("[CRON] orchestrate started");
+        const result = await ai.chat(ORCHESTRATE_PROMPT, chatId, SYSTEM_PROMPT, { maxRounds: 25 });
+        logger.info("[CRON] orchestrate done");
+        res.json({ success: true, response: result.response, tokens: result.tokens });
+    } catch (e) {
+        logger.error("[CRON] orchestrate error: " + e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Factor MCP proxy
 app.post("/factor", async (req, res) => {
     const { tool, params = {} } = req.body;
@@ -881,4 +1057,10 @@ app.listen(CONFIG.port, "0.0.0.0", async () => {
     logger.info(`AI provider: ${provider} | MiniMax: OAuth=${MiniMaxOAuth.hasOAuth()}, Key=${!!_minimaxKey} | OpenRouter: ${!!_openrouterKey}`);
     const ok = await factorBridge.start();
     logger.info(`Factor MCP: ${ok ? "connected" : "not available"}`);
+    startCronJobs({
+        port: CONFIG.port,
+        secret: CRON_SECRET,
+        agentRole: AGENT_ROLE,
+        log: (msg) => logger.info(msg),
+    });
 });

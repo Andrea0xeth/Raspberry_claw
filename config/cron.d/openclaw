@@ -1,0 +1,6 @@
+# OpenClaw cron — heartbeat check (orchestrator on port 3100)
+# Install: sudo cp config/cron.d/openclaw /etc/cron.d/openclaw && sudo chmod 644 /etc/cron.d/openclaw
+# Every 5 min: GET /heartbeat (or /HEARTBEAT) to verify the service is up.
+SHELL=/bin/sh
+PATH=/usr/bin:/bin
+*/5 * * * * root curl -sf -o /dev/null http://127.0.0.1:3100/heartbeat || true

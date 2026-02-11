@@ -27,9 +27,9 @@ LimitNOFILE=65535
 LimitNPROC=4096
 LimitMEMLOCK=infinity
 
-# Memoria: limita a 6GB su 8GB totali (lascia 2GB per OS)
-MemoryMax=6G
-MemoryHigh=5G
+# Memoria: limita a 3GB su 4GB totali (lascia ~1GB per OS + OpenClaw, ~256MB GPU)
+MemoryMax=3G
+MemoryHigh=2560M
 
 # Timeout
 TimeoutStartSec=60

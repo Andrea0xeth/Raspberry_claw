@@ -42,3 +42,13 @@ logs/
 # Backup
 *.bak
 *.backup
+
+# Factor MCP locale (copia da ~/.factor-mcp: config e wallet restano fuori da git)
+local/factor-mcp/config.json
+local/factor-mcp/wallets/
+
+# Backup Pi (chiavi, OAuth, tar di sorgenti)
+backup-pi/
+
+# Non parte del progetto principale (IDE, stato Cursor, one-off)
+.cursor/

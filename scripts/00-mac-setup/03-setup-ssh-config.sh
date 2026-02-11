@@ -7,6 +7,7 @@
 # Uso:
 #   bash scripts/00-mac-setup/03-setup-ssh-config.sh
 #   bash scripts/00-mac-setup/03-setup-ssh-config.sh --ip 192.168.1.50
+#   bash scripts/00-mac-setup/03-setup-ssh-config.sh --ip 192.168.1.88 --port 2222
 ###############################################################################
 set -euo pipefail
 
@@ -23,9 +24,9 @@ err()  { echo -e "${RED}[✗]${NC} $1"; }
 info() { echo -e "${BLUE}[i]${NC} $1"; }
 
 # ─── Parametri ──────────────────────────────────────────────────────────────
-PI_USER="${1:-pi}"
-PI_HOST="${2:-piclaw.local}"
-PI_PORT="${3:-22}"
+PI_USER="pi"
+PI_HOST="piclaw.local"
+PI_PORT="2222"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -33,7 +34,7 @@ while [[ $# -gt 0 ]]; do
         --ip|-i)    PI_HOST="$2"; shift 2 ;;
         --port|-p)  PI_PORT="$2"; shift 2 ;;
         --help|-h)
-            echo "Uso: $0 [--user pi] [--ip piclaw.local] [--port 22]"
+            echo "Uso: $0 [--user pi] [--ip piclaw.local] [--port 2222]"
             exit 0
             ;;
         *) shift ;;

@@ -1,0 +1,11 @@
+# Sudoers fragment for user openclaw (OpenClaw agent).
+# Allows only: manage openclaw service and update its unit file from /tmp.
+# Install: sudo cp openclaw-sudoers /etc/sudoers.d/openclaw && sudo chmod 440 /etc/sudoers.d/openclaw
+# Remove:  sudo rm /etc/sudoers.d/openclaw
+
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl start openclaw
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop openclaw
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart openclaw
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl status openclaw
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+openclaw ALL=(ALL) NOPASSWD: /usr/bin/cp /tmp/openclaw.service.new /etc/systemd/system/openclaw.service

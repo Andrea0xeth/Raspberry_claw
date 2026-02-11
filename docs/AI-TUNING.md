@@ -6,21 +6,23 @@ Il modello AI di PiClaw e' basato su Llama 3.2 con un system prompt personalizza
 
 ## Modelli Disponibili
 
-### Performance su Raspberry Pi 4 (8GB RAM)
+### Performance su Raspberry Pi 4 (4GB RAM)
+
+Con 4GB di RAM totali, ~1GB e' riservato per OS + OpenClaw e ~256MB per la GPU,
+lasciando ~3GB disponibili per Ollama. La quantizzazione Q4_K_M e' essenziale.
 
 | Modello | Dimensione | RAM Richiesta | Tokens/sec | Consigliato |
 |---|---|---|---|---|
-| `llama3.2:1b-q4_K_M` | ~600 MB | ~2 GB | 10-15 t/s | Risposte veloci |
-| `llama3.2:3b-q4_K_M` | ~2 GB | ~3.5 GB | 3-6 t/s | **Default PiClaw** |
-| `llama3.2:8b-q4_K_M` | ~4.7 GB | ~6 GB | 1-2 t/s | Massima qualita' |
-| `phi3:mini-q4_K_M` | ~2.3 GB | ~3.5 GB | 4-7 t/s | Alternativa |
-| `gemma2:2b-q4_K_M` | ~1.6 GB | ~3 GB | 5-8 t/s | Alternativa |
+| `llama3.2:1b-q4_K_M` | ~600 MB | ~2 GB | 10-15 t/s | **Default PiClaw** |
+| `llama3.2:3b-q4_K_M` | ~2 GB | ~3.5 GB | 1-3 t/s | Troppo per 4GB (swap) |
+| `phi3:mini-q4_K_M` | ~2.3 GB | ~3.5 GB | 1-2 t/s | Troppo per 4GB |
+| `gemma2:2b-q4_K_M` | ~1.6 GB | ~3 GB | 3-5 t/s | Alternativa possibile |
 
 ### Scelta del Modello
 
-- **Uso generale (default)**: `llama3.2:3b` - bilanciamento qualita'/velocita'
-- **Risposte rapide**: `llama3.2:1b` - per decisioni semplici/monitoring
-- **Qualita' massima**: `llama3.2:8b` - per analisi complesse (piu' lento)
+- **Uso generale (default)**: `llama3.2:1b` - unico modello che gira fluido con 4GB RAM
+- **Alternativa leggera**: `gemma2:2b` - possibile ma al limite della RAM
+- **Sconsigliato su 4GB**: `llama3.2:3b` e superiori - causano swap eccessivo e rallentano tutto
 
 ## Personalizzazione Modelfile
 
@@ -60,7 +62,7 @@ Conversazione generale:                 temperature 0.7  (naturale)
 
 ```bash
 cat > models/Modelfile.piclaw-domotica << 'EOF'
-FROM llama3.2:3b
+FROM llama3.2:1b
 
 SYSTEM """Sei PiClaw Domotica, un agente AI specializzato nella gestione di una casa intelligente tramite Raspberry Pi 4.
 
@@ -93,7 +95,7 @@ ollama create piclaw-domotica -f models/Modelfile.piclaw-domotica
 
 ```bash
 cat > models/Modelfile.piclaw-sysadmin << 'EOF'
-FROM llama3.2:3b
+FROM llama3.2:1b
 
 SYSTEM """Sei PiClaw SysAdmin, un agente specializzato nel monitoraggio e gestione di server e servizi.
 
@@ -133,9 +135,9 @@ Il `num_ctx` impatta direttamente la RAM utilizzata:
 | 4096 | ~800 MB | **Default** - analisi normali |
 | 8192 | ~1.6 GB | Analisi complesse con molto contesto |
 
-Per RPi4 8GB con Ollama:
-- `num_ctx=4096` lascia ~2-3 GB per OS e servizi
-- `num_ctx=2048` per modelli piu' grandi (8b)
+Per RPi4 4GB con Ollama (limite memoria ~3GB):
+- `num_ctx=4096` e' il massimo consigliato con modello 1b
+- `num_ctx=2048` consigliato se si usa gemma2:2b o si vuole piu' margine RAM
 
 ## RAG (Retrieval Augmented Generation)
 
@@ -235,10 +237,10 @@ Con 1TB SSD, puoi mantenere piu' modelli:
 ollama list
 du -sh /data/ollama/models/*
 
-# Modelli consigliati da avere installati:
-ollama pull llama3.2:1b    # ~600MB - veloce
-ollama pull llama3.2:3b    # ~2GB - default
-ollama pull codellama:7b   # ~4GB - codice (opzionale)
+# Modelli consigliati da avere installati (4GB RAM):
+ollama pull llama3.2:1b    # ~600MB - default PiClaw (unico fluido su 4GB)
+# ollama pull llama3.2:3b  # ~2GB - sconsigliato su 4GB (swap eccessivo)
+# ollama pull codellama:7b # ~4GB - NON usabile su 4GB RAM
 
 # Crea varianti custom
 ollama create piclaw-agent -f models/Modelfile.piclaw-agent
@@ -257,9 +259,9 @@ curl -X POST http://localhost:3100/decide \
 ## Consigli di Tuning
 
 1. **Inizia con temperature bassa** (0.1-0.3) per decisioni di sistema
-2. **Riduci num_ctx** se la RAM scarseggia
-3. **Usa modello 1b** per monitoring proattivo (risposte rapide)
-4. **Usa modello 3b** per decisioni complesse
+2. **Riduci num_ctx** se la RAM scarseggia (con 4GB, `num_ctx=2048` e' piu' sicuro)
+3. **Usa modello 1b** (default e unico consigliato per 4GB RAM)
+4. **Quantizzazione Q4_K_M** e' obbligatoria su 4GB per contenere l'uso RAM
 5. **Testa sempre** dopo modifiche al Modelfile
-6. **Monitora** RAM e temperature durante inference
+6. **Monitora** RAM e temperature durante inference (con 4GB il margine e' ridotto)
 7. **Documenta** le personalizzazioni nel Modelfile stesso

@@ -9,7 +9,8 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/openclaw/src
-EnvironmentFile=/opt/openclaw/config/.env
+Environment=OPENCLAW_AGENT_ROLE=orchestrator
+Environment=OPENCLAW_AGENT_LABEL=Orchestrator
 ExecStart=/usr/bin/node /opt/openclaw/src/index.js
 ExecReload=/bin/kill -HUP $MAINPID
 

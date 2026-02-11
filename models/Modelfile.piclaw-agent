@@ -4,10 +4,10 @@
 # Creazione: ollama create piclaw-agent -f Modelfile.piclaw-agent
 # Test:      ollama run piclaw-agent "Analizza lo stato del sistema"
 
-FROM llama3.2:3b
+FROM llama3.2:1b
 
 # System prompt per agente decisionale autonomo
-SYSTEM """Sei PiClaw, un agente AI autonomo e proattivo che opera su un Raspberry Pi 4 (8GB RAM, 1TB SSD).
+SYSTEM """Sei PiClaw, un agente AI autonomo e proattivo che opera su un Raspberry Pi 4 (4GB RAM, 1TB SSD).
 
 HAI ACCESSO COMPLETO AL SISTEMA:
 - Esecuzione comandi shell (bash) con privilegi root/sudo

@@ -1,6 +1,6 @@
 # Raspberry Claw - Sistema Agente AI Autonomo per Raspberry Pi 4
 
-> **Progetto completo step-by-step**: Raspberry Pi 4 (8GB) + 1TB SSD + OpenClaw + Ollama AI Engine
+> **Progetto completo step-by-step**: Raspberry Pi 4 (4GB) + 1TB SSD + OpenClaw + Ollama AI Engine
 > per un agente AI autonomo con accesso completo all'hardware.
 
 ---
@@ -28,7 +28,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   RASPBERRY PI 4 (8GB)                  │
+│                   RASPBERRY PI 4 (4GB)                  │
 │                                                         │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │  microSD    │  │  1TB NVMe    │  │    GPIO/I2C   │  │
@@ -52,7 +52,7 @@
 │  ┌──────────────────────────┴────────────────────────┐  │
 │  │           OLLAMA AI ENGINE (on SSD)               │  │
 │  │  ┌─────────────────────────────────────────────┐  │  │
-│  │  │  Llama 3.2 8B/13B (Q4_K_M quantized)       │  │  │
+│  │  │  Llama 3.2 1B (Q4_K_M quantized)            │  │  │
 │  │  │  Custom Modelfile: decision-maker prompt    │  │  │
 │  │  │  RAG: documenti + contesto hardware         │  │  │
 │  │  └─────────────────────────────────────────────┘  │  │
@@ -66,8 +66,8 @@
 
 | Componente | Specifica | Note |
 |---|---|---|
-| **Raspberry Pi 4** | Model B, 8GB RAM | Essenziale per AI inference |
-| **microSD** | 32GB Class 10/A2 | Solo per boot iniziale + firmware |
+| **Raspberry Pi 4** | Model B, 4GB RAM | Essenziale per AI inference |
+| **microSD** | 8GB Class 10 | Solo per boot iniziale + firmware |
 | **SSD 1TB** | USB-C esterno o NVMe in enclosure | Tutto il software gira da qui |
 | **Adattatore USB-C → USB-A** | USB 3.0 | **Solo se** il tuo SSD ha connettore USB-C |
 | **Alimentatore** | USB-C 5V/3A (15W) | Ufficiale RPi consigliato |
@@ -79,13 +79,13 @@
 > Vedi [docs/SETUP-SPIEGATO.md](docs/SETUP-SPIEGATO.md) per la spiegazione completa con diagrammi.
 
 ```
-FASE 1 (setup):    microSD 32GB → flash OS, primo boot
+FASE 1 (setup):    microSD 8GB → flash OS, primo boot
 FASE 2 (migrazione): sistema copiato su SSD 1TB
 FASE 3 (per sempre): microSD = solo firmware boot (~50MB)
                       SSD 1TB = TUTTO (OS, AI, dati, ~990GB liberi)
 ```
 
-La microSD e' troppo lenta (25 MB/s) e piccola (32GB) per l'AI. L'SSD e' 14x piu' veloce (350 MB/s) e ha lo spazio per i modelli AI (3-5GB ciascuno).
+La microSD e' troppo lenta (25 MB/s) e piccola (8GB) per l'AI. L'SSD e' 15x piu' veloce (~390 MB/s) e ha lo spazio per i modelli AI (~1.3GB ciascuno per 1b quantizzati).
 
 ### ATTENZIONE: Porta USB-C del Pi 4
 
@@ -144,7 +144,7 @@ La microSD e' troppo lenta (25 MB/s) e piccola (32GB) per l'AI. L'SSD e' 14x piu
 ### 0.1 Flash OS sulla microSD (dal Mac)
 
 1. Scarica e installa [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-2. Inserisci la microSD 32GB nel Mac
+2. Inserisci la microSD 8GB nel Mac
 3. Apri Raspberry Pi Imager e seleziona:
    - **Device**: Raspberry Pi 4
    - **OS**: Raspberry Pi OS (64-bit) Lite - Bookworm
@@ -355,7 +355,7 @@ Lo script `01-initial-setup.sh` esegue:
 - Configurazione boot USB nel bootloader
 - Installazione Node.js 20 LTS
 - Installazione Docker CE
-- Configurazione swap ottimale per 8GB RAM
+- Configurazione swap ottimale per 4GB RAM
 - Hardening sicurezza base
 
 ### 1.3 Migrazione Boot su SSD
@@ -445,10 +445,10 @@ sudo bash scripts/04-ai-engine/02-setup-models.sh
 Il modello custom `piclaw-agent` e' definito in `models/Modelfile.piclaw-agent`:
 
 ```
-FROM llama3.2:8b-instruct-q4_K_M
+FROM llama3.2:1b
 
 SYSTEM """
-Sei PiClaw, un agente AI autonomo che opera su Raspberry Pi 4.
+Sei PiClaw, un agente AI autonomo che opera su Raspberry Pi 4 (4GB RAM).
 Hai accesso COMPLETO al sistema: root/sudo, GPIO, I2C, SPI, rete, file, processi.
 
 CAPACITA':
@@ -596,9 +596,13 @@ Raspberry_claw/
 │   │   └── 01-ssd-optimize.sh            # Ottimizzazioni SSD/sistema
 │   ├── 06-testing/
 │   │   └── 01-run-tests.sh               # Suite di test completa
-│   └── 07-remote-access/                 # ← ACCESSO DA RETI DIVERSE
-│       ├── 01-install-nordvpn-meshnet.sh # NordVPN Meshnet sul Pi
-│       └── 02-setup-port-forwarding.sh   # Port forwarding (no servizi esterni)
+│   ├── 07-remote-access/                 # ← ACCESSO DA RETI DIVERSE
+│   │   ├── 01-install-nordvpn-meshnet.sh # NordVPN Meshnet sul Pi
+│   │   └── 02-setup-port-forwarding.sh   # Port forwarding (no servizi esterni)
+│   └── openclaw-factor/                  # OpenClaw + Factor MCP + skill factor-strategies
+│       ├── backup-wallet.sh              # Backup wallet prima reset
+│       ├── install-factor-mcp.sh         # Installa Factor MCP
+│       └── install-factor-skill.sh       # Installa skill factor-strategies
 ├── config/
 │   ├── systemd/
 │   │   ├── openclaw.service              # Service file OpenClaw
@@ -621,6 +625,7 @@ Raspberry_claw/
 └── docs/
     ├── SETUP-SPIEGATO.md                 # ⭐ Spiegazione semplice: a cosa servono SD e SSD
     ├── ACCESSO-REMOTO.md                 # Guida accesso da reti diverse (Tailscale, etc.)
+    ├── OPENCLAW-FACTOR-SETUP.md          # OpenClaw: reset, wallet, full control, Factor MCP, skill
     ├── TROUBLESHOOTING.md                # Guida troubleshooting
     ├── HARDWARE-GUIDE.md                 # Guida hardware dettagliata
     └── AI-TUNING.md                      # Guida fine-tuning modello

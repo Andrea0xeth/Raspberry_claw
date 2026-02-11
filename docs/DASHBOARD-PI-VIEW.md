@@ -1,42 +1,34 @@
-# Dashboard: agent activity, logs, and Pi files
+# Dashboard PiClaw — Agents, Chat, Logs, Files
 
-The PiClaw dashboard (port 3201) shows **Agents**, **Chat**, **Logs**, and **Files**. Everything that happens in the agents and on the Pi can be exposed there.
+The dashboard is **served by OpenClaw** at **`/dashboard`** on port **3100**. Point the tunnel (e.g. https://piclaw.supasoft.xyz) to the Pi on **port 3100** so the dashboard is at **https://piclaw.supasoft.xyz/dashboard**. Root **`/`** redirects to `/dashboard` when the client accepts HTML.
 
-## What is exposed
+## Tabs
 
-| Tab | Source | Description |
-|-----|--------|-------------|
-| **Agents** | `/agent/messages` | Supervisor and worker activity from the journal (delegations, cycle summaries, errors). Polled every 3s. |
-| **Chat** | `/chat` (POST) | User chat with the main agent. |
-| **Logs** | `/logs` | Unified log: today’s agent journal (`.jsonl`) + `agent.log`. Replaces the previous shell tail. |
-| **Files** | `/pi/files`, `/pi/file` | Browse Pi filesystem (read-only) under `/opt/openclaw`, `/data`, `/home/openclaw`, `/home/pi`. Like viewing the Pi as a repo. |
+| Tab | Description |
+|-----|--------------|
+| **🧠 Agents** | Everything the agent says and thinks: user messages, assistant replies, tool calls (Factor MCP), reasoning. Polled every 3s from `/agent/messages`. |
+| **💬 Chat** | Talk to 0xpiclaw.eth: type and Send. Uses `POST /chat`. |
+| **📋 Logs** | Unified logs: today’s agent journal (`.jsonl`) + OpenClaw `agent.log` + last 100 lines of `/var/log/syslog`. `GET /logs?journal=80&agentLog=200&syslog=100`. |
+| **📁 Files** | Browse the Raspberry Pi filesystem (read-only). Allowed roots: `/opt/openclaw`, `/data`, `/home/openclaw`, `/home/pi`, `/var/log`, and `/` (whole system). |
 
-## Backend (OpenClaw app)
+## Backend (OpenClaw)
 
-- **dashboard-routes.js** (ESM) in `/opt/openclaw/src/`:
-  - `GET /agent/messages?since=N` — messages from journal (ids > N).
-  - `GET /logs?journal=80&agentLog=200` — merged journal + agent.log.
-  - `GET /pi/files?path=...` — list directory (allowed roots only).
-  - `GET /pi/file?path=...` — read file content (max 1MB, allowed roots only).
-- **index.js** loads it with ESM: `await import("dashboard-routes.js")` then `registerDashboardRoutes(app)`.
+- **dashboard-routes.js** in `/opt/openclaw/src/`:
+  - `GET /agent/messages?since=N` — messages from `/data/agent-journal/YYYY-MM-DD.jsonl` (chat + tool_call entries).
+  - `GET /logs?journal=80&agentLog=200&syslog=100` — journal + agent.log + syslog.
+  - `GET /pi/files?path=...` — list directory.
+  - `GET /pi/file?path=...` — read file (max 1MB).
+- **index.js** registers these routes and serves **`openclaw/public/index.html`** at `/dashboard` and `/`.
+- Each chat turn and each Factor tool call is appended to the agent journal so the Agents tab stays up to date.
 
-## Dashboard (dashboard.mjs)
+## Deploy
 
-- **Logs**: `/api/logs` now proxies to OpenClaw `GET /logs` (unified).
-- **Files tab**: path input + “Go” lists entries; click a dir to go in, click a file to show content in the panel.
-- **Agents**: `/api/agent-messages` proxies to `GET /agent/messages` (populated from journal).
+From the repo (after pulling):
 
-## Apply / update
-
-1. **Backend** (once): copy `scripts/openclaw-factor/dashboard-routes.js` to `/opt/openclaw/src/` and patch `index.js` (see `patch-dashboard-routes.sh`; use ESM `await import(...)` not `require`).
-2. **Dashboard** (once): run `node scripts/openclaw-factor/patch-dashboard-apply.mjs` on the Pi (patches `dashboard.mjs` for Files tab and unified logs).
-3. Restart: `sudo systemctl restart openclaw piclaw-dashboard`.
+1. Sync openclaw to the Pi and copy to `/opt/openclaw` (skills, src, **public**).
+2. Restart OpenClaw: `sudo systemctl restart openclaw`.
+3. Point the public URL (e.g. Cloudflare tunnel) to the Pi **port 3100**. If you previously used port 3201 for a separate dashboard service, you can stop it and use only OpenClaw.
 
 ## Allowed file roots
 
-- `/opt/openclaw`
-- `/data`
-- `/home/openclaw`
-- `/home/pi`
-
-Paths outside these are rejected with 403.
+- `/opt/openclaw`, `/data`, `/home/openclaw`, `/home/pi`, `/var/log`, `/` (entire filesystem).

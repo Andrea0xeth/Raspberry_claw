@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenClaw Agent 2 (second instance)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/openclaw/src
+Environment=OPENCLAW_ROOT=/opt/openclaw-agent2
+Environment=OPENCLAW_PORT=3101
+Environment=OPENCLAW_AGENT_ROLE=defi-expert
+Environment=OPENCLAW_AGENT_LABEL=DeFi Expert
+ExecStart=/usr/bin/node /opt/openclaw/src/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-agent2
+
+[Install]
+WantedBy=multi-user.target

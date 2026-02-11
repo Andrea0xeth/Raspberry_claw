@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenClaw Agent 4 (System Improver - sudo, logs, improvements)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/openclaw/src
+Environment=OPENCLAW_ROOT=/opt/openclaw-agent4
+Environment=OPENCLAW_PORT=3103
+Environment=OPENCLAW_AGENT_ROLE=system-improver
+Environment=OPENCLAW_AGENT_LABEL=System Improver
+ExecStart=/usr/bin/node /opt/openclaw/src/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-agent4
+
+[Install]
+WantedBy=multi-user.target

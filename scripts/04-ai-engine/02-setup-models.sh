@@ -60,19 +60,23 @@ RAM_TOTAL_GB=$(free -g | awk 'NR==2{print $2}')
 
 info "RAM disponibile: ${RAM_FREE_GB}GB liberi / ${RAM_TOTAL_GB}GB totali"
 
-# Selezione modello
-# - 8B Q4_K_M: ~4.7GB, richiede ~5GB RAM → OK per 8GB Pi
-# - 3B Q4_K_M: ~2.0GB, richiede ~3GB RAM → Piu' veloce
-# - 1B Q4_K_M: ~0.8GB, richiede ~2GB RAM → Ultra veloce
+# Selezione modello per RPi4 4GB
+# - 1B Q4_K_M: ~0.8GB, richiede ~2GB RAM → Default per 4GB (fluido)
+# - 3B Q4_K_M: ~2.0GB, richiede ~3.5GB RAM → Troppo per 4GB (swap)
+# - 8B Q4_K_M: ~4.7GB, richiede ~5GB RAM → NON usabile su 4GB
 if [[ $RAM_TOTAL_GB -ge 7 ]]; then
     BASE_MODEL="llama3.2:3b"
     ALT_MODEL="llama3.2:1b"
     info "RPi 8GB rilevato. Modello principale: $BASE_MODEL"
     info "Modello secondario (veloce): $ALT_MODEL"
+elif [[ $RAM_TOTAL_GB -ge 3 ]]; then
+    BASE_MODEL="llama3.2:1b"
+    ALT_MODEL=""
+    info "RPi 4GB rilevato. Modello: $BASE_MODEL (Q4_K_M, unico fluido su 4GB)"
 else
     BASE_MODEL="llama3.2:1b"
     ALT_MODEL=""
-    info "RAM limitata. Modello: $BASE_MODEL"
+    info "RAM limitata (<4GB). Modello: $BASE_MODEL"
 fi
 
 # Download modello principale
@@ -103,7 +107,7 @@ cat > "$MODELFILE_PATH" << MODELFILE
 FROM ${BASE_MODEL}
 
 # System prompt per agente decisionale autonomo
-SYSTEM """Sei PiClaw, un agente AI autonomo e proattivo che opera su un Raspberry Pi 4 (8GB RAM, 1TB SSD).
+SYSTEM """Sei PiClaw, un agente AI autonomo e proattivo che opera su un Raspberry Pi 4 (4GB RAM, 1TB SSD).
 
 HAI ACCESSO COMPLETO AL SISTEMA:
 - Esecuzione comandi shell (bash) con privilegi root/sudo
@@ -200,7 +204,7 @@ SPECIALIZZAZIONI:
 - Docker (containerizzazione servizi)
 
 CONTESTO:
-- Raspberry Pi 4 con 8GB RAM e 1TB SSD
+- Raspberry Pi 4 con 4GB RAM e 1TB SSD
 - Raspberry Pi OS 64-bit (Bookworm, Debian 12)
 - Python 3.11+, Node.js 20 LTS, Docker CE
 - Hardware: GPIO 40 pin, I2C, SPI, UART
