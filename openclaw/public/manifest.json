@@ -1,0 +1,19 @@
+{
+  "name": "PiClaw — 0xpiclaw.eth",
+  "short_name": "PiClaw",
+  "description": "DeFi agent dashboard",
+  "start_url": "/dashboard/",
+  "scope": "/dashboard/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0d12",
+  "theme_color": "#7c5cff",
+  "icons": [
+    {
+      "src": "/dashboard/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

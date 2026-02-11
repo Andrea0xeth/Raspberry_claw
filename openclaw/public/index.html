@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0d12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PiClaw" />
+  <link rel="manifest" href="/dashboard/manifest.json" />
+  <link rel="apple-touch-icon" href="/dashboard/icon.svg" />
+  <title>PiClaw — 0xpiclaw.eth</title>
+  <style>
+    :root {
+      --bg: #0d0d12;
+      --surface: #16161d;
+      --surface2: #1c1c26;
+      --text: #e6e6ed;
+      --muted: #8b8b9e;
+      --accent: #7c5cff;
+      --accent-hover: #8d6dff;
+      --border: #2a2a36;
+      --user: #1e3d2a;
+      --agent: #2a3340;
+      --tool: #3d3528;
+      --error: #c44;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.25);
+      --transition: 0.15s ease;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; height: 100%; }
+    body {
+      font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+      font-size: clamp(13px, 1.8vw, 15px);
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      height: 100%;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      display: flex;
+      flex-direction: column;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .top .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .top h1 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: -0.02em; }
+    .top .nav-wrap { display: flex; flex: 1; min-width: 0; justify-content: flex-end; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nav-btn {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.9em;
+      transition: background var(--transition), border-color var(--transition), color var(--transition);
+    }
+    .nav-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .nav-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .nav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* Mobile: hamburger + dropdown menu */
+    .nav-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-toggle:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .nav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .nav-toggle .hamburger { display: flex; flex-direction: column; gap: 5px; }
+    .nav-toggle .hamburger span {
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 1px;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    .nav-toggle[aria-expanded="true"] .hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .nav-toggle[aria-expanded="true"] .hamburger span:nth-child(2) { opacity: 0; }
+    .nav-toggle[aria-expanded="true"] .hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    .nav-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      margin: 0;
+      padding: 8px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      z-index: 20;
+      flex-direction: column;
+      gap: 4px;
+      list-style: none;
+    }
+    .nav-menu.open { display: flex; }
+    .nav-menu .nav-menu-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding: 14px 16px;
+      min-height: 48px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 1rem;
+      text-align: left;
+      -webkit-tap-highlight-color: transparent;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .nav-menu .nav-menu-item:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .nav-menu .nav-menu-item.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .nav-menu .nav-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .panels { flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: 1200px; width: 100%; margin: 0 auto; padding: 16px; }
+    .panel { display: none !important; min-height: 0; }
+    .panel.active { display: flex !important; flex-direction: column; flex: 1; min-height: 0; animation: panelIn 0.2s ease; }
+    .panel.active #agentsScroll,
+    .panel.active #chatHistory,
+    .panel.active #systemScroll,
+    .panel.active #logsScroll,
+    .panel.active #filesScroll { flex: 1; min-height: 0; max-height: none; }
+    @keyframes panelIn { from { opacity: 0.97; } to { opacity: 1; } }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .panel .sys-toolbar,
+    .panel .files-toolbar { flex-shrink: 0; }
+    .scroll {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      overflow-y: auto;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.55;
+    }
+    .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll::-webkit-scrollbar-track { background: var(--surface2); border-radius: 4px; }
+    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+    .msg {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--muted);
+      line-height: 1.5;
+    }
+    .msg:last-child { margin-bottom: 0; }
+    .msg.user { background: var(--user); border-color: #4a7a5a; }
+    .msg.assistant { background: var(--agent); border-color: var(--accent); }
+    .msg.tool_call { background: var(--tool); border-color: #8b7a5a; }
+    .msg .from { font-weight: 600; color: var(--muted); margin-bottom: 6px; display: block; }
+    .msg .ts { font-size: 0.75rem; color: var(--muted); opacity: 0.9; }
+    /* Chat (Cursor/ChatGPT style) */
+    #pChat { padding: 0; display: flex; flex-direction: column; min-height: 0; }
+    #pChat .chat-heading { flex-shrink: 0; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    #pChat .chat-heading h2 { margin: 0; font-size: 0.9rem; font-weight: 500; color: var(--muted); }
+    #pChat .chat-messages {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      -webkit-overflow-scrolling: touch;
+    }
+    #pChat .chat-messages::-webkit-scrollbar { width: 8px; }
+    #pChat .chat-messages::-webkit-scrollbar-track { background: transparent; }
+    #pChat .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .chat-row { display: flex; gap: 12px; align-items: flex-start; max-width: 900px; }
+    .chat-row.chat-row--user { align-self: flex-end; flex-direction: row-reverse; }
+    .chat-row.chat-row--assistant { align-self: flex-start; }
+    .chat-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .chat-row--user .chat-avatar { background: var(--accent); border-color: var(--accent); }
+    .chat-bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 85%; }
+    .chat-name { font-size: 0.72rem; font-weight: 600; color: var(--muted); padding: 0 4px; }
+    .chat-row--user .chat-name { text-align: right; }
+    .chat-bubble {
+      padding: 12px 16px;
+      border-radius: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.95rem;
+    }
+    .chat-row--user .chat-bubble {
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-row--assistant .chat-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-input-bar { display: none !important; }
+    #pChat.active .chat-input-bar { display: flex !important; }
+    #pChat .input-bar { border-radius: 0; padding: 16px 20px; }
+    #pChat .input-bar input { border-radius: 22px; padding: 12px 20px; }
+    #pChat .chat-messages .empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 120px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .chat-row.chat-row--thinking .chat-bubble { color: var(--muted); font-size: 0.9rem; }
+    .chat-thinking-dots { display: inline-flex; gap: 4px; }
+    .chat-thinking-dots span {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+      animation: chatThink 0.6s ease-in-out infinite;
+    }
+    .chat-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .chat-thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes chatThink { 0%, 100% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1); } }
+    .chat-reasoning-wrap { margin-bottom: 10px; }
+    .chat-reasoning-toggle {
+      font-size: 0.8rem;
+      color: var(--accent);
+      cursor: pointer;
+      user-select: none;
+      padding: 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chat-reasoning-toggle:hover { text-decoration: underline; }
+    .chat-reasoning-toggle::before { content: "▶"; font-size: 0.65rem; transition: transform 0.2s; }
+    .chat-reasoning-toggle.expanded::before { transform: rotate(90deg); }
+    .chat-reasoning-content {
+      display: none;
+      padding: 12px 14px;
+      margin-top: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .chat-reasoning-content.show { display: block; }
+    .input-bar {
+      flex-shrink: 0;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 14px 20px;
+      padding-bottom: max(14px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: var(--surface);
+    }
+    .input-bar input {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 16px;
+      font-family: inherit;
+      transition: border-color var(--transition);
+    }
+    .input-bar input:focus { outline: none; border-color: var(--accent); }
+    .input-bar input::placeholder { color: var(--muted); }
+    .input-bar button {
+      padding: 12px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      transition: background var(--transition), filter var(--transition);
+    }
+    .input-bar button:hover { background: var(--accent-hover); filter: brightness(1.05); }
+    .input-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .input-bar .send-btn { display: none; }
+    .files-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .files-toolbar input {
+      flex: 1;
+      min-width: 180px;
+      padding: 10px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font: inherit;
+    }
+    .qbtn {
+      padding: 8px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      transition: background var(--transition), border-color var(--transition), color var(--transition);
+    }
+    .qbtn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .qbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .file-row {
+      padding: 12px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .file-row:hover { background: var(--surface2); }
+    .file-row:last-child { border-bottom: none; }
+    .empty {
+      color: var(--muted);
+      padding: 28px 20px;
+      text-align: center;
+      font-size: 0.95em;
+    }
+    .file-content {
+      white-space: pre-wrap;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      max-height: 55vh;
+      overflow: auto;
+      padding: 14px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      margin-top: 10px;
+      border: 1px solid var(--border);
+    }
+    #chatHistory .msg:last-child { margin-bottom: 0; }
+    /* Logs panel */
+    .log-section { margin-bottom: 20px; }
+    .log-section:last-child { margin-bottom: 0; }
+    .log-section h4 {
+      margin: 0 0 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+    }
+    .log-section[data-source="journal"] h4 { color: #6a9b6a; }
+    .log-section[data-source="agent.log"] h4 { color: #8b7a5a; }
+    .log-section[data-source="syslog"] h4 { color: var(--muted); }
+    .log-entry {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--border);
+      font-size: 0.8rem;
+      line-height: 1.45;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .log-entry.log-entry--error { border-left-color: var(--error); background: rgba(139, 58, 58, 0.15); }
+    .log-entry .log-ts { color: var(--muted); font-size: 0.7rem; margin-bottom: 4px; }
+    .log-json {
+      font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+      font-size: 0.78rem;
+      margin: 0;
+      overflow-x: auto;
+    }
+    .log-line { margin: 2px 0; }
+    /* System panel */
+    .sys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .sys-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .sys-card:hover { border-color: var(--muted); box-shadow: var(--shadow); }
+    .sys-card h3 { margin: 0 0 10px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+    .sys-value { font-size: 1.6rem; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+    .sys-value.alert { color: #e5a84f; }
+    .sys-value.danger { color: var(--error); }
+    .sys-detail { font-size: 0.8rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .sys-list { list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
+    .sys-list li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .sys-list li:last-child { border-bottom: none; }
+    .sys-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .sys-toolbar .updated { font-size: 0.8rem; color: var(--muted); }
+
+    /* Mobile: hamburger menu instead of tabs */
+    @media (max-width: 768px) {
+      body { font-size: 14px; padding-left: 0; padding-right: 0; }
+      .top { flex-wrap: wrap; padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 10px; }
+      .top .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .top h1 { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .top .nav-wrap { position: relative; width: 100%; margin: 0; padding: 0; justify-content: flex-end; }
+      .top .nav { display: none; }
+      .nav-toggle { display: flex; }
+      .panels { padding: 12px; max-width: none; }
+      .panel h2 { font-size: 0.9rem; margin-bottom: 10px; }
+      .scroll { padding: 10px; -webkit-overflow-scrolling: touch; }
+      .input-bar { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 10px; }
+      .input-bar input { min-width: 0; min-height: 44px; font-size: 16px; }
+      .input-bar button { min-height: 44px; padding: 10px 20px; -webkit-tap-highlight-color: transparent; }
+      .files-toolbar { gap: 8px; }
+      .files-toolbar input { min-width: 0; flex: 1 1 100%; }
+      .qbtn { min-height: 44px; padding: 10px 14px; -webkit-tap-highlight-color: transparent; }
+      .file-row { padding: 12px; min-height: 44px; }
+      .sys-grid { grid-template-columns: 1fr; gap: 12px; }
+      .sys-card { padding: 12px; }
+      .sys-value { font-size: 1.35rem; }
+      .sys-toolbar .qbtn { min-height: 44px; }
+      .msg { padding: 12px; }
+    }
+    @media (max-width: 480px) {
+      .top .muted-label { display: none; }
+    }
+    @media (min-width: 1400px) {
+      .panels { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">
+      <h1>🧠 PiClaw</h1>
+      <span class="muted-label" style="color: var(--muted); font-size: 12px;">0xpiclaw.eth</span>
+    </div>
+    <div class="nav-wrap">
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
+        <span class="hamburger"><span></span><span></span><span></span></span>
+      </button>
+      <nav class="nav" aria-label="Tabs">
+        <button class="nav-btn active" data-tab="agents">🧠 Agents</button>
+        <button class="nav-btn" data-tab="chat">💬 Chat</button>
+        <button class="nav-btn" data-tab="system">📊 System</button>
+        <button class="nav-btn" data-tab="logs">📋 Logs</button>
+        <button class="nav-btn" data-tab="files">📁 Files</button>
+      </nav>
+      <ul class="nav-menu" id="navMenu" role="menu">
+        <li role="none"><button type="button" class="nav-menu-item active" data-tab="agents" role="menuitem">🧠 Agents</button></li>
+        <li role="none"><button type="button" class="nav-menu-item" data-tab="chat" role="menuitem">💬 Chat</button></li>
+        <li role="none"><button type="button" class="nav-menu-item" data-tab="system" role="menuitem">📊 System</button></li>
+        <li role="none"><button type="button" class="nav-menu-item" data-tab="logs" role="menuitem">📋 Logs</button></li>
+        <li role="none"><button type="button" class="nav-menu-item" data-tab="files" role="menuitem">📁 Files</button></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel active" id="pAgents">
+      <h2>Agent activity (messages, reasoning, tool calls)</h2>
+      <div class="scroll" id="agentsScroll"><div class="empty">Loading…</div></div>
+    </div>
+    <div class="panel" id="pChat">
+      <div class="chat-heading"><h2>Chat with 0xpiclaw.eth</h2></div>
+      <div class="chat-messages scroll" id="chatHistory"><div class="empty">Send a message below. Press Enter to send.</div></div>
+      <div class="input-bar chat-input-bar">
+        <input type="text" id="chatInput" placeholder="Message 0xpiclaw.eth…" />
+        <button type="button" id="chatSend" class="send-btn" aria-label="Send">Send</button>
+      </div>
+    </div>
+    <div class="panel" id="pSystem">
+      <h2>Raspberry Pi — System</h2>
+      <div class="sys-toolbar">
+        <button class="qbtn" id="systemRefresh">🔄 Refresh</button>
+        <span class="updated" id="systemUpdated">—</span>
+      </div>
+      <div class="scroll" id="systemScroll"><div class="empty">Loading…</div></div>
+    </div>
+    <div class="panel" id="pLogs">
+      <h2>Logs (journal + agent.log + syslog)</h2>
+      <div class="scroll" id="logsScroll"><div class="empty">Loading…</div></div>
+    </div>
+    <div class="panel" id="pFiles">
+      <h2>Files (Raspberry Pi)</h2>
+      <div class="files-toolbar">
+        <input type="text" id="filesPath" placeholder="/opt/openclaw" value="/opt/openclaw" />
+        <button class="qbtn" onclick="goBack()">↑ Parent</button>
+        <button class="qbtn" onclick="setPath('/')">⌂ Root</button>
+        <button class="qbtn" onclick="setPath('/var/log')">/var/log</button>
+        <button class="qbtn" onclick="loadFiles()">Go</button>
+      </div>
+      <div class="scroll" id="filesScroll"><div class="empty">Enter path and click Go.</div></div>
+      <pre id="fileContent" class="file-content" style="display:none"></pre>
+    </div>
+  </div>
+
+  <script>
+    const API = ""; // same origin
+    let tab = "agents";
+    let agentSince = 0;
+    let agentPollTimer = null;
+
+    function $(id) { return document.getElementById(id); }
+    function go(t) {
+      tab = t;
+      const panelId = "p" + t.charAt(0).toUpperCase() + t.slice(1);
+      document.querySelectorAll(".nav-btn").forEach(b => { b.classList.toggle("active", b.dataset.tab === tab); });
+      document.querySelectorAll(".nav-menu-item").forEach(b => { b.classList.toggle("active", b.dataset.tab === tab); });
+      document.querySelectorAll(".panel").forEach(p => { p.classList.toggle("active", p.id === panelId); });
+      closeNavMenu();
+      if (t === "agents") pollAgents();
+      if (t === "logs") loadLogs();
+      if (t === "files") loadFiles();
+      if (t === "system") { loadSystem(); startSystemPoll(); }
+      if (t === "chat") $("chatInput").focus();
+    }
+    function openNavMenu() {
+      const menu = $("navMenu");
+      const toggle = $("navToggle");
+      if (menu && toggle) { menu.classList.add("open"); toggle.setAttribute("aria-expanded", "true"); }
+    }
+    function closeNavMenu() {
+      const menu = $("navMenu");
+      const toggle = $("navToggle");
+      if (menu && toggle) { menu.classList.remove("open"); toggle.setAttribute("aria-expanded", "false"); }
+    }
+    document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => go(b.dataset.tab)));
+    document.querySelectorAll(".nav-menu-item").forEach(b => b.addEventListener("click", () => go(b.dataset.tab)));
+    $("navToggle") && $("navToggle").addEventListener("click", () => {
+      const menu = $("navMenu");
+      const isOpen = menu && menu.classList.toggle("open");
+      $("navToggle").setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+    document.body.addEventListener("click", (e) => {
+      const wrap = document.querySelector(".nav-wrap");
+      if (wrap && !wrap.contains(e.target) && $("navMenu") && $("navMenu").classList.contains("open")) closeNavMenu();
+    });
+
+    async function pollAgents() {
+      try {
+        const r = await fetch(API + "/agent/messages?since=" + agentSince);
+        const d = await r.json();
+        if (d.messages && d.messages.length) {
+          agentSince = Math.max(agentSince, ...d.messages.map(m => m.id));
+          const el = $("agentsScroll");
+          if (el.querySelector(".empty")) el.innerHTML = "";
+          d.messages.forEach(m => {
+            const div = document.createElement("div");
+            div.className = "msg " + (m.type === "tool_call" ? "tool_call" : m.from === "user" ? "user" : "assistant");
+            div.innerHTML = "<span class=\"from\">" + escapeHtml(m.from) + "</span> <span class=\"ts\">" + escapeHtml(m.ts) + "</span><br/>" + escapeHtml(m.content || "");
+            el.appendChild(div);
+          });
+          el.scrollTop = el.scrollHeight;
+        }
+      } catch (e) {
+        $("agentsScroll").innerHTML = "<div class=\"empty\">Error: " + escapeHtml(e.message) + "</div>";
+      }
+    }
+    function escapeHtml(s) {
+      if (typeof s !== "string") return "";
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function startAgentPoll() {
+      if (agentPollTimer) clearInterval(agentPollTimer);
+      agentPollTimer = setInterval(() => { if (tab === "agents") pollAgents(); }, 3000);
+    }
+    let logPollTimer = null;
+    function startLogPoll() {
+      if (logPollTimer) clearInterval(logPollTimer);
+      logPollTimer = setInterval(() => { if (tab === "logs") loadLogs(); }, 5000);
+    }
+    pollAgents().then(startAgentPoll);
+    startLogPoll();
+
+    // Chat (Cursor/ChatGPT style)
+    function addThinkingRow() {
+      const el = $("chatHistory");
+      if (el.querySelector(".empty")) el.innerHTML = "";
+      const row = document.createElement("div");
+      row.className = "chat-row chat-row--assistant chat-row--thinking";
+      row.id = "chatThinkingRow";
+      const avatar = document.createElement("div");
+      avatar.className = "chat-avatar";
+      avatar.textContent = "🧠";
+      const wrap = document.createElement("div");
+      wrap.className = "chat-bubble-wrap";
+      const name = document.createElement("div");
+      name.className = "chat-name";
+      name.textContent = "0xpiclaw.eth";
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble";
+      bubble.innerHTML = "<span class=\"chat-thinking-dots\"><span></span><span></span><span></span></span> Thinking…";
+      wrap.appendChild(name);
+      wrap.appendChild(bubble);
+      row.appendChild(avatar);
+      row.appendChild(wrap);
+      el.appendChild(row);
+      el.scrollTop = el.scrollHeight;
+      return row;
+    }
+    function removeThinkingRow() {
+      const row = document.getElementById("chatThinkingRow");
+      if (row) row.remove();
+    }
+    function addChatBubble(role, text, opts) {
+      opts = opts || {};
+      const reasoning = opts.reasoning;
+      const el = $("chatHistory");
+      if (el.querySelector(".empty")) el.innerHTML = "";
+      const isUser = role === "user";
+      const row = document.createElement("div");
+      row.className = "chat-row " + (isUser ? "chat-row--user" : "chat-row--assistant");
+      const avatar = document.createElement("div");
+      avatar.className = "chat-avatar";
+      avatar.textContent = isUser ? "👤" : "🧠";
+      avatar.setAttribute("aria-hidden", "true");
+      const wrap = document.createElement("div");
+      wrap.className = "chat-bubble-wrap";
+      const name = document.createElement("div");
+      name.className = "chat-name";
+      name.textContent = isUser ? "You" : "0xpiclaw.eth";
+      if (reasoning && !isUser) {
+        const reasoningWrap = document.createElement("div");
+        reasoningWrap.className = "chat-reasoning-wrap";
+        const toggle = document.createElement("div");
+        toggle.className = "chat-reasoning-toggle";
+        toggle.textContent = "Thinking";
+        const content = document.createElement("pre");
+        content.className = "chat-reasoning-content";
+        content.textContent = reasoning;
+        toggle.onclick = function () {
+          toggle.classList.toggle("expanded");
+          content.classList.toggle("show");
+        };
+        reasoningWrap.appendChild(toggle);
+        reasoningWrap.appendChild(content);
+        wrap.appendChild(reasoningWrap);
+      }
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble";
+      bubble.textContent = text || "";
+      wrap.appendChild(name);
+      wrap.appendChild(bubble);
+      row.appendChild(avatar);
+      row.appendChild(wrap);
+      el.appendChild(row);
+      el.scrollTop = el.scrollHeight;
+    }
+    $("chatSend").onclick = async () => {
+      const input = $("chatInput");
+      const msg = input.value.trim();
+      if (!msg) return;
+      input.value = "";
+      addChatBubble("user", msg);
+      addThinkingRow();
+      $("chatSend").disabled = true;
+      try {
+        const r = await fetch(API + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) });
+        const d = await r.json();
+        removeThinkingRow();
+        if (d.error) addChatBubble("assistant", "Error: " + d.error);
+        else addChatBubble("assistant", d.response || d.message || "OK", { reasoning: d.reasoning || null });
+      } catch (e) {
+        removeThinkingRow();
+        addChatBubble("assistant", "Error: " + e.message);
+      }
+      $("chatSend").disabled = false;
+    };
+    $("chatInput").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("chatSend").click(); } };
+
+    // Logs: sections + JSON pretty-print
+    function formatJsonPretty(jsonStr) {
+      try {
+        const o = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+        return JSON.stringify(o, null, 2);
+      } catch (_) { return jsonStr; }
+    }
+    async function loadLogs() {
+      try {
+        const r = await fetch(API + "/logs?journal=80&agentLog=200&syslog=100");
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        const el = $("logsScroll");
+        el.innerHTML = "";
+        const sections = d.sections || (d.lines && d.source ? (() => {
+          const out = []; let cur = null;
+          for (let i = 0; i < d.lines.length; i++) {
+            const src = d.source[i] || "log";
+            if (!cur || cur.source !== src) { cur = { source: src, lines: [] }; out.push(cur); }
+            cur.lines.push(d.lines[i]);
+          }
+          return out;
+        })() : []);
+        if (!sections.length) {
+          el.innerHTML = "<div class=\"empty\">No logs</div>";
+          el.scrollTop = 0;
+          return;
+        }
+        const sourceLabel = { journal: "Journal", "agent.log": "Agent log", syslog: "Syslog" };
+        for (const sec of sections) {
+          const sectionDiv = document.createElement("div");
+          sectionDiv.className = "log-section";
+          sectionDiv.setAttribute("data-source", sec.source);
+          sectionDiv.innerHTML = "<h4>" + escapeHtml(sourceLabel[sec.source] || sec.source) + "</h4>";
+          const wrap = document.createElement("div");
+          for (const line of sec.lines) {
+            const entry = document.createElement("div");
+            entry.className = "log-entry";
+            let isError = false;
+            let ts = "";
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.level === "error" || (parsed.message && String(parsed.message).toLowerCase().includes("error"))) isError = true;
+              if (parsed.timestamp) ts = parsed.timestamp; else if (parsed.ts) ts = parsed.ts; else if (parsed.time) ts = parsed.time;
+              if (ts) { const tsSpan = document.createElement("div"); tsSpan.className = "log-ts"; tsSpan.textContent = ts; entry.appendChild(tsSpan); }
+              const pre = document.createElement("pre");
+              pre.className = "log-json";
+              pre.textContent = formatJsonPretty(line);
+              entry.appendChild(pre);
+            } catch (_) {
+              if (/error|Error|ERROR/.test(line)) entry.classList.add("log-entry--error");
+              const pre = document.createElement("pre");
+              pre.className = "log-json";
+              pre.textContent = line;
+              entry.appendChild(pre);
+            }
+            if (isError) entry.classList.add("log-entry--error");
+            wrap.appendChild(entry);
+          }
+          sectionDiv.appendChild(wrap);
+          el.appendChild(sectionDiv);
+        }
+        el.scrollTop = el.scrollHeight;
+      } catch (e) {
+        $("logsScroll").innerHTML = "<div class=\"empty\">Error: " + escapeHtml(e.message) + "</div>";
+      }
+    }
+
+    // System (Pi)
+    let systemPollTimer = null;
+    async function loadSystem() {
+      try {
+        const r = await fetch(API + "/pi/system");
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        $("systemUpdated").textContent = "Updated " + (d.at ? new Date(d.at).toLocaleTimeString() : "");
+        const el = $("systemScroll");
+        el.innerHTML = "";
+        el.classList.remove("scroll");
+        const grid = document.createElement("div");
+        grid.className = "sys-grid";
+
+        const card = (title, body) => {
+          const c = document.createElement("div");
+          c.className = "sys-card";
+          c.innerHTML = "<h3>" + escapeHtml(title) + "</h3>" + body;
+          return c;
+        };
+
+        if (d.temperature) {
+          const v = d.temperature.value;
+          const cls = v >= 70 ? "danger" : v >= 55 ? "alert" : "";
+          grid.appendChild(card("Temperature", "<div class=\"sys-value " + cls + "\">" + v + " " + (d.temperature.unit || "°C") + "</div><div class=\"sys-detail\">SoC (vcgencmd)</div>"));
+        }
+        if (d.throttled) {
+          const dec = (d.throttled.decoded && d.throttled.decoded.join(", ")) || d.throttled.raw || "—";
+          const isOk = dec === "OK" || !dec;
+          grid.appendChild(card("Throttling", "<div class=\"sys-value " + (isOk ? "" : "alert") + "\">" + escapeHtml(dec) + "</div><div class=\"sys-detail\">" + escapeHtml(d.throttled.raw || "") + "</div>"));
+        }
+        if (d.load) {
+          grid.appendChild(card("Load average", "<div class=\"sys-value\">" + d.load.load1.toFixed(2) + " " + d.load.load5.toFixed(2) + " " + d.load.load15.toFixed(2) + "</div><div class=\"sys-detail\">1m, 5m, 15m</div>"));
+        }
+        if (d.uptimeFormatted) {
+          grid.appendChild(card("Uptime", "<div class=\"sys-value\">" + escapeHtml(d.uptimeFormatted) + "</div><div class=\"sys-detail\">" + (d.uptimeSeconds != null ? Math.floor(d.uptimeSeconds) + " s" : "") + "</div>"));
+        }
+        if (d.memory) {
+          const m = d.memory;
+          grid.appendChild(card("Memory", "<div class=\"sys-value\">" + m.usedMb + " / " + m.totalMb + " MB</div><div class=\"sys-detail\">" + m.percentUsed + "% used · " + m.availableMb + " MB available</div>"));
+        }
+        if (d.cpu && (d.cpu.model || d.cpu.cores)) {
+          grid.appendChild(card("CPU", "<div class=\"sys-value\">" + (d.cpu.cores || "—") + " cores</div><div class=\"sys-detail\">" + escapeHtml((d.cpu.model || "").replace(/^Model name\s*:\s*|^Hardware\s*:\s*/i, "")) + "</div>"));
+        }
+        if (d.volt) {
+          grid.appendChild(card("Voltage", "<div class=\"sys-value\">" + escapeHtml(d.volt.replace("volt=", "")) + "</div><div class=\"sys-detail\">core</div>"));
+        }
+        if (d.clockArm) {
+          const hz = parseInt(d.clockArm, 10);
+          grid.appendChild(card("ARM clock", "<div class=\"sys-value\">" + (hz >= 1e6 ? (hz / 1e6).toFixed(1) + " MHz" : d.clockArm) + "</div>"));
+        }
+        if (d.gpuMem || d.armMem) {
+          grid.appendChild(card("Memory split", "<div class=\"sys-detail\">" + escapeHtml([d.armMem, d.gpuMem].filter(Boolean).join(" · ") || "—") + "</div>"));
+        }
+        if (d.disks && d.disks.length) {
+          let rows = "";
+          d.disks.forEach(function (disk) {
+            rows += "<li><span>" + escapeHtml(disk.mount) + "</span><span>" + disk.used + " / " + disk.size + " (" + disk.usePct + ")</span></li>";
+          });
+          grid.appendChild(card("Disk", "<ul class=\"sys-list\">" + rows + "</ul>"));
+        }
+        if (d.hostname) {
+          grid.appendChild(card("Hostname", "<div class=\"sys-value\" style=\"font-size:1rem\">" + escapeHtml(d.hostname) + "</div>"));
+        }
+        if (d.uname) {
+          grid.appendChild(card("Kernel", "<div class=\"sys-detail\" style=\"font-size:11px;word-break:break-all\">" + escapeHtml(d.uname) + "</div>"));
+        }
+
+        el.appendChild(grid);
+      } catch (e) {
+        $("systemScroll").innerHTML = "<div class=\"empty\">Error: " + escapeHtml(e.message) + "</div>";
+        $("systemUpdated").textContent = "";
+      }
+    }
+    $("systemRefresh").onclick = () => loadSystem();
+    function startSystemPoll() {
+      if (systemPollTimer) return;
+      systemPollTimer = setInterval(function () { if (tab === "system") loadSystem(); }, 10000);
+    }
+
+    // Files
+    function setPath(p) { $("filesPath").value = p; loadFiles(); }
+    function goBack() {
+      const inp = $("filesPath");
+      let p = inp.value.trim() || "/";
+      if (p === "/") return;
+      const parts = p.replace(/\/+/g, "/").split("/").filter(Boolean);
+      if (!parts.length) return;
+      parts.pop();
+      inp.value = parts.length ? "/" + parts.join("/") : "/";
+      loadFiles();
+    }
+    async function loadFiles() {
+      const p = ($("filesPath") && $("filesPath").value) || "/opt/openclaw";
+      try {
+        const r = await fetch(API + "/pi/files?path=" + encodeURIComponent(p));
+        const d = await r.json();
+        const el = $("filesScroll");
+        const fc = $("fileContent");
+        el.style.display = "block";
+        fc.style.display = "none";
+        el.innerHTML = "";
+        if (d.error) { el.textContent = d.error; return; }
+        if (d.entries) {
+          d.entries.forEach(e => {
+            const row = document.createElement("div");
+            row.className = "file-row";
+            row.textContent = (e.type === "dir" ? "📁 " : "📄 ") + e.name;
+            row.onclick = () => {
+              if (e.type === "dir") { $("filesPath").value = e.path; loadFiles(); }
+              else {
+                fetch(API + "/pi/file?path=" + encodeURIComponent(e.path)).then(r => r.json()).then(d => {
+                  fc.style.display = "block";
+                  fc.textContent = d.content != null ? d.content : (d.error || "");
+                  el.style.display = "none";
+                });
+              }
+            };
+            el.appendChild(row);
+          });
+        }
+      } catch (e) {
+        $("filesScroll").innerHTML = "Error: " + escapeHtml(e.message);
+      }
+    }
+  </script>
+</body>
+</html>
