@@ -1,13 +1,13 @@
-# Factor MCP — copia locale (non in git)
+# Factor MCP — local copy (not in git)
 
-Copia qui config e wallet da `~/.factor-mcp/` per averli nel progetto in locale.
+Copy config and wallets from `~/.factor-mcp/` here to keep them in the project locally.
 
 ```bash
-# Da eseguire nella root del repo (Raspberry_claw)
+# Run from repo root (Raspberry_claw)
 mkdir -p local/factor-mcp/wallets
 cp ~/.factor-mcp/config.json local/factor-mcp/ 2>/dev/null || true
 cp ~/.factor-mcp/wallets/*.json local/factor-mcp/wallets/ 2>/dev/null || true
 ```
 
-- `config.json` e `wallets/` sono in **.gitignore** (contengono chiavi e dati sensibili).
-- Per ripristinare sul Pi o su un’altra macchina: copia il contenuto di questa cartella in `~/.factor-mcp/` (o in `/root/.factor-mcp/` sul Pi se i servizi girano come root).
+- `config.json` and `wallets/` are in **.gitignore** (they contain keys and sensitive data).
+- To restore on the Pi or another machine: copy this folder’s contents to `~/.factor-mcp/` (or `/root/.factor-mcp/` on the Pi if services run as root).

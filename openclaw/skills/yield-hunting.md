@@ -12,7 +12,7 @@ Use this when the user asks for **best yield**, **APY comparison**, or **yield o
 
 ---
 
-## Adapter → DefiLlama map (per chain)
+## Adapter → DefiLlama map (by chain)
 
 Use **factor_list_adapters()** (after **factor_set_chain(chain)**) to get the exact list for the vault’s chain. Then map adapter `id` to DefiLlama `project` using this table. Only protocols with a DefiLlama project in the row are queryable for APY; DEX/swap-only adapters have no lending yield in DefiLlama.
 
