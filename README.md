@@ -73,7 +73,7 @@ Detailed step-by-step (including SSD boot, SSH, and remote access) is in **[READ
 
 - **Node.js** 18+ (for the agent and Telegram bridge).
 - **Raspberry Pi**: Pi 4 (4GB RAM recommended) or similar; optional 1TB SSD for OS + models.
-- **API keys** (as needed): OpenRouter, Kimi, MiniMax, Telegram Bot Token, Discord webhook(s). Stored locally only.
+- **API keys and webhooks** (as needed): OpenRouter, Kimi, MiniMax, Telegram Bot Token, Discord webhook URLs. Set via environment variables or local config; see [docs/ENV-VARS.md](docs/ENV-VARS.md). Never commit them.
 
 ---
 
@@ -120,6 +120,7 @@ Raspberry_claw/
 | [docs/PI-COMANDI.md](docs/PI-COMANDI.md) | Pi commands (Italian): systemctl, Telegram, Instagram, deploy |
 | [docs/OPENCLAW-CRON.md](docs/OPENCLAW-CRON.md) | Cron and heartbeat |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and fixes |
+| [docs/ENV-VARS.md](docs/ENV-VARS.md) | Environment variables and secrets (Discord, Telegram, AI keys) |
 
 ---
 

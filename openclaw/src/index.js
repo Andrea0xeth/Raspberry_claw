@@ -77,8 +77,8 @@ await fs.mkdir(MEMORY_DIR, { recursive: true });
 
 // ─── Discord Log Transport (real-time logs to thread) ───────────────────────
 import Transport from "winston-transport";
-const DISCORD_LOG_WEBHOOK = "https://discord.com/api/webhooks/1471473609934376971/2FyN9vX18xW7hm-Pfn03XAhB9EuSJUw-tlQopwqHPkFFW9K1fiop1kotjA1NJHI1qxIG";
-const DISCORD_LOG_THREAD_ID = "1471473572110270626";
+const DISCORD_LOG_WEBHOOK = process.env.DISCORD_LOG_WEBHOOK || "";
+const DISCORD_LOG_THREAD_ID = process.env.DISCORD_LOG_THREAD_ID || "";
 
 class DiscordLogTransport extends Transport {
     constructor(opts = {}) {
@@ -106,6 +106,7 @@ class DiscordLogTransport extends Transport {
         if (this._queue.length === 0) { this._flushing = false; return; }
         const batch = this._queue.splice(0, 15); // max 15 lines per message
         const content = batch.join("\n").substring(0, 2000);
+        if (!DISCORD_LOG_WEBHOOK) { this._flushing = false; return; }
         const url = DISCORD_LOG_THREAD_ID
             ? `${DISCORD_LOG_WEBHOOK}?thread_id=${DISCORD_LOG_THREAD_ID}`
             : DISCORD_LOG_WEBHOOK;
@@ -712,9 +713,9 @@ class FactorMCPBridge {
 
 const factorBridge = new FactorMCPBridge(CONFIG.factorMcpPath);
 
-// ─── Discord Webhook ────────────────────────────────────────────────────────
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1470438238039703667/RjSMg_d7hrsoN_Noe8SybysQkEG6CKocm6ZvBXVgRqTbiKK2jO2pSPWDiotFoalpDgck";
-const DISCORD_THREAD_ID = "1470412059429699738";
+// ─── Discord Webhook (set via env; do not commit secrets) ────────────────────
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
+const DISCORD_THREAD_ID = process.env.DISCORD_THREAD_ID || "";
 
 async function sendDiscordMessage(content, username = null) {
     if (!DISCORD_WEBHOOK_URL) return false;

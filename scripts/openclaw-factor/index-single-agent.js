@@ -989,9 +989,9 @@ tools.factor = async ({ tool, params = {} }) => {
     }
 };
 
-// ─── Discord Webhook Notifier ────────────────────────────────────────────────
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1470438238039703667/RjSMg_d7hrsoN_Noe8SybysQkEG6CKocm6ZvBXVgRqTbiKK2jO2pSPWDiotFoalpDgck";
-const DISCORD_THREAD_ID = "1470412059429699738";
+// ─── Discord Webhook (set via env; do not commit secrets) ────────────────────
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || "";
+const DISCORD_THREAD_ID = process.env.DISCORD_THREAD_ID || "";
 
 async function sendDiscordMessage(content) {
     if (!DISCORD_WEBHOOK_URL) {

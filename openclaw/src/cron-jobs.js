@@ -42,8 +42,8 @@ export const CRON_JOBS = [
 ];
 
 // ─── Pi System Report → Discord Thread (every 30 min) ──────────────────────
-const PI_REPORT_WEBHOOK = "https://discord.com/api/webhooks/1471473609934376971/2FyN9vX18xW7hm-Pfn03XAhB9EuSJUw-tlQopwqHPkFFW9K1fiop1kotjA1NJHI1qxIG";
-const PI_REPORT_THREAD_ID = "1471474310903496857";
+const PI_REPORT_WEBHOOK = process.env.DISCORD_LOG_WEBHOOK || process.env.PI_REPORT_WEBHOOK || "";
+const PI_REPORT_THREAD_ID = process.env.DISCORD_LOG_THREAD_ID || process.env.PI_REPORT_THREAD_ID || "";
 
 // ─── Bitcoin price → Discord (every 5 min) ─────────────────────────────────
 const COINGECKO_BTC = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true";
@@ -60,14 +60,16 @@ async function sendBtcPrice(log = () => {}) {
         const msgDiscord = `₿ Bitcoin: **$${usd}** ${change}`.trim();
         const msgTelegram = `₿ Bitcoin: $${usd} ${change}`.trim();
 
-        const url = `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}`;
-        const resp = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: msgDiscord, username: "piclaw-btc" }),
-        });
-        if (resp.ok || resp.status === 204) log("[BTC] sent to Discord");
-        else log("[BTC] Discord error: " + resp.status);
+        if (PI_REPORT_WEBHOOK) {
+            const url = PI_REPORT_THREAD_ID ? `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}` : PI_REPORT_WEBHOOK;
+            const resp = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: msgDiscord, username: "piclaw-btc" }),
+            });
+            if (resp.ok || resp.status === 204) log("[BTC] sent to Discord");
+            else log("[BTC] Discord error: " + resp.status);
+        }
 
         const token = process.env.TELEGRAM_BOT_TOKEN;
         const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -120,16 +122,18 @@ async function sendPiSystemReport(log = () => {}) {
             disks,
         ].join("\n").substring(0, 2000);
 
-        const url = `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}`;
-        const resp = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: report, username: "piclaw-system" }),
-        });
-        if (resp.ok || resp.status === 204) {
-            log("[PI-REPORT] sent to Discord thread");
-        } else {
-            log("[PI-REPORT] Discord error: " + resp.status);
+        if (PI_REPORT_WEBHOOK) {
+            const url = PI_REPORT_THREAD_ID ? `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}` : PI_REPORT_WEBHOOK;
+            const resp = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: report, username: "piclaw-system" }),
+            });
+            if (resp.ok || resp.status === 204) {
+                log("[PI-REPORT] sent to Discord thread");
+            } else {
+                log("[PI-REPORT] Discord error: " + resp.status);
+            }
         }
     } catch (e) {
         log("[PI-REPORT] error: " + e.message);
