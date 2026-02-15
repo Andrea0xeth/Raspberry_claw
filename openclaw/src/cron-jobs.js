@@ -27,7 +27,7 @@ export const CRON_JOBS = [
         scheduleMs: 30 * 60 * 1000,
         method: "POST",
         path: "/cron/orchestrate",
-        description: "Check vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc, trigger DeFi Expert, Executor, System Improver, post to Discord",
+        description: "Discover vaults via factor_get_owned_vaults, then for chosen vault(s) trigger DeFi Expert, Executor, System Improver, post to Discord",
         roles: ["orchestrator"],
     },
     {
@@ -40,6 +40,101 @@ export const CRON_JOBS = [
         roles: ["orchestrator"],
     },
 ];
+
+// ─── Pi System Report → Discord Thread (every 30 min) ──────────────────────
+const PI_REPORT_WEBHOOK = "https://discord.com/api/webhooks/1471473609934376971/2FyN9vX18xW7hm-Pfn03XAhB9EuSJUw-tlQopwqHPkFFW9K1fiop1kotjA1NJHI1qxIG";
+const PI_REPORT_THREAD_ID = "1471474310903496857";
+
+// ─── Bitcoin price → Discord (every 5 min) ─────────────────────────────────
+const COINGECKO_BTC = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true";
+
+async function sendBtcPrice(log = () => {}) {
+    try {
+        const r = await fetch(COINGECKO_BTC);
+        if (!r.ok) { log("[BTC] CoinGecko failed: " + r.status); return; }
+        const data = await r.json();
+        const btc = data.bitcoin;
+        if (!btc || btc.usd == null) { log("[BTC] No price in response"); return; }
+        const usd = typeof btc.usd === "number" ? btc.usd.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : btc.usd;
+        const change = btc.usd_24h_change != null ? (btc.usd_24h_change >= 0 ? "+" : "") + btc.usd_24h_change.toFixed(2) + "% 24h" : "";
+        const msgDiscord = `₿ Bitcoin: **$${usd}** ${change}`.trim();
+        const msgTelegram = `₿ Bitcoin: $${usd} ${change}`.trim();
+
+        const url = `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}`;
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: msgDiscord, username: "piclaw-btc" }),
+        });
+        if (resp.ok || resp.status === 204) log("[BTC] sent to Discord");
+        else log("[BTC] Discord error: " + resp.status);
+
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = process.env.TELEGRAM_CHAT_ID;
+        if (token && chatId) {
+            const tgUrl = `https://api.telegram.org/bot${token}/sendMessage`;
+            const tgResp = await fetch(tgUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, text: msgTelegram }),
+            });
+            if (tgResp.ok) log("[BTC] sent to Telegram");
+            else log("[BTC] Telegram error: " + tgResp.status);
+        }
+    } catch (e) {
+        log("[BTC] error: " + e.message);
+    }
+}
+
+async function sendPiSystemReport(log = () => {}) {
+    try {
+        const r = await fetch("http://127.0.0.1:3100/pi/system");
+        if (!r.ok) { log("[PI-REPORT] /pi/system failed: " + r.status); return; }
+        const s = await r.json();
+
+        const temp = s.temperature ? `${s.temperature.value}°C` : "N/A";
+        const throttle = s.throttled?.decoded?.join(", ") || "N/A";
+        const load = s.load ? `${s.load.load1} / ${s.load.load5} / ${s.load.load15}` : "N/A";
+        const mem = s.memory ? `${s.memory.usedMb}MB / ${s.memory.totalMb}MB (${s.memory.percentUsed}%)` : "N/A";
+        const disks = (s.disks || []).map(d => `\`${d.mount}\` ${d.used}/${d.size} (${d.usePct})`).join("\n") || "N/A";
+        const cpu = s.cpu ? `${s.cpu.model || "?"} × ${s.cpu.cores || "?"}` : "N/A";
+        const clock = s.clockArm ? `${(parseInt(s.clockArm) / 1e6).toFixed(0)} MHz` : "N/A";
+        const volt = s.volt || "N/A";
+        const uptime = s.uptimeFormatted || "N/A";
+
+        const report = [
+            `## Raspberry Pi — System Report`,
+            `\`${s.at || new Date().toISOString()}\``,
+            ``,
+            `**Hostname:** ${s.hostname || "N/A"}`,
+            `**Uptime:** ${uptime}`,
+            `**CPU:** ${cpu} @ ${clock}`,
+            `**Temperature:** ${temp}`,
+            `**Throttle:** ${throttle}`,
+            `**Voltage:** ${volt}`,
+            `**Load (1/5/15):** ${load}`,
+            `**Memory:** ${mem}`,
+            `**GPU:** ${s.gpuMem || "N/A"} | **ARM:** ${s.armMem || "N/A"}`,
+            ``,
+            `**Disks:**`,
+            disks,
+        ].join("\n").substring(0, 2000);
+
+        const url = `${PI_REPORT_WEBHOOK}?thread_id=${PI_REPORT_THREAD_ID}`;
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: report, username: "piclaw-system" }),
+        });
+        if (resp.ok || resp.status === 204) {
+            log("[PI-REPORT] sent to Discord thread");
+        } else {
+            log("[PI-REPORT] Discord error: " + resp.status);
+        }
+    } catch (e) {
+        log("[PI-REPORT] error: " + e.message);
+    }
+}
 
 /**
  * Start in-process cron intervals for this agent. Only jobs whose `roles` include
@@ -78,6 +173,20 @@ export function startCronJobs(opts) {
         started++;
         log(`[CRON] Scheduled: ${job.name} (every ${job.scheduleMs / 60000} min)`);
     }
+
+    // Pi System Report → Discord (every 30 min)
+    const piReportRun = () => sendPiSystemReport(log);
+    setTimeout(piReportRun, 10000); // first report 10s after boot
+    setInterval(piReportRun, 30 * 60 * 1000);
+    started++;
+    log(`[CRON] Scheduled: Pi System Report → Discord (every 30 min)`);
+
+    // Bitcoin price → Discord (every 5 min)
+    const btcRun = () => sendBtcPrice(log);
+    setTimeout(btcRun, 30000); // first run 30s after boot
+    setInterval(btcRun, 5 * 60 * 1000);
+    started++;
+    log(`[CRON] Scheduled: Bitcoin price → Discord (every 5 min)`);
 
     if (started > 0) {
         log(`[CRON] ${started} job(s) active. Health: GET ${baseUrl}/heartbeat or GET ${baseUrl}/HEARTBEAT`);

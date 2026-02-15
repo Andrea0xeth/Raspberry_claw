@@ -32,6 +32,8 @@ try { const k = (await fs.readFile(path.join(OPENCLAW_ROOT, ".minimax_key"), "ut
 const AI_PROVIDER_FILE = path.join(OPENCLAW_ROOT, ".ai_provider");
 let _openrouterKey = process.env.OPENROUTER_API_KEY || "";
 try { const k = (await fs.readFile(path.join(OPENCLAW_ROOT, ".openrouter_key"), "utf8")).trim(); if (k) _openrouterKey = k; } catch {}
+let _kimiKey = process.env.KIMI_API_KEY || "";
+try { const k = (await fs.readFile(path.join(OPENCLAW_ROOT, ".kimi_key"), "utf8")).trim(); if (k) _kimiKey = k; } catch {}
 
 async function getAiProvider() {
     try { return (await fs.readFile(AI_PROVIDER_FILE, "utf8")).trim().toLowerCase() || "minimax"; } catch {}
@@ -39,7 +41,7 @@ async function getAiProvider() {
 }
 async function setAiProvider(provider) {
     const p = (provider || "minimax").toLowerCase();
-    if (p !== "minimax" && p !== "openrouter") throw new Error("AI provider must be minimax or openrouter");
+    if (p !== "minimax" && p !== "openrouter" && p !== "kimi") throw new Error("AI provider must be minimax, openrouter, or kimi");
     await fs.writeFile(AI_PROVIDER_FILE, p, "utf8");
     return p;
 }
@@ -47,6 +49,9 @@ async function setAiProvider(provider) {
 const OPENROUTER_MODEL_FILE = path.join(OPENCLAW_ROOT, ".openrouter_model");
 let _openrouterModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 try { const m = (await fs.readFile(OPENROUTER_MODEL_FILE, "utf8")).trim(); if (m) _openrouterModel = m; } catch {}
+const KIMI_MODEL_FILE = path.join(OPENCLAW_ROOT, ".kimi_model");
+let _kimiModel = process.env.KIMI_MODEL || "kimi-k2.5";
+try { const m = (await fs.readFile(KIMI_MODEL_FILE, "utf8")).trim(); if (m) _kimiModel = m; } catch {}
 
 const SKILLS_DIR = path.join(OPENCLAW_ROOT, "skills");
 
@@ -57,6 +62,9 @@ const CONFIG = {
     openrouterUrl: process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
     get openrouterModel() { return _openrouterModel; },
     set openrouterModel(v) { _openrouterModel = v || _openrouterModel; },
+    kimiUrl: process.env.KIMI_API_URL || "https://api.kimi.com/coding/v1/messages",
+    get kimiModel() { return _kimiModel; },
+    set kimiModel(v) { _kimiModel = v || _kimiModel; },
     factorMcpPath: process.env.FACTOR_MCP_PATH || path.join(OPENCLAW_ROOT, "factor-mcp", "dist", "index.js"),
     logDir: process.env.LOG_DIR || path.join(OPENCLAW_ROOT, "logs"),
 };
@@ -67,6 +75,52 @@ await fs.mkdir(CONFIG.logDir, { recursive: true });
 await fs.mkdir(SKILLS_DIR, { recursive: true });
 await fs.mkdir(MEMORY_DIR, { recursive: true });
 
+// ─── Discord Log Transport (real-time logs to thread) ───────────────────────
+import Transport from "winston-transport";
+const DISCORD_LOG_WEBHOOK = "https://discord.com/api/webhooks/1471473609934376971/2FyN9vX18xW7hm-Pfn03XAhB9EuSJUw-tlQopwqHPkFFW9K1fiop1kotjA1NJHI1qxIG";
+const DISCORD_LOG_THREAD_ID = "1471473572110270626";
+
+class DiscordLogTransport extends Transport {
+    constructor(opts = {}) {
+        super(opts);
+        this.name = "discord-log";
+        this._queue = [];
+        this._flushing = false;
+    }
+    log(info, callback) {
+        // Skip DISCORD messages to avoid recursion
+        if (info.message && info.message.includes("[DISCORD]")) { callback(); return; }
+        const ts = info.timestamp ? info.timestamp.substring(11, 19) : "";
+        const lvl = (info.level || "info").toUpperCase().replace(/\u001b\[\d+m/g, "").padEnd(5);
+        const line = `\`${ts}\` **${lvl}** ${(info.message || "").substring(0, 1800)}`;
+        this._queue.push(line);
+        this._scheduleFlush();
+        callback();
+    }
+    _scheduleFlush() {
+        if (this._flushing) return;
+        this._flushing = true;
+        setTimeout(() => this._flush(), 1500); // batch logs every 1.5s
+    }
+    async _flush() {
+        if (this._queue.length === 0) { this._flushing = false; return; }
+        const batch = this._queue.splice(0, 15); // max 15 lines per message
+        const content = batch.join("\n").substring(0, 2000);
+        const url = DISCORD_LOG_THREAD_ID
+            ? `${DISCORD_LOG_WEBHOOK}?thread_id=${DISCORD_LOG_THREAD_ID}`
+            : DISCORD_LOG_WEBHOOK;
+        try {
+            await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content, username: "piclaw-logs" }),
+            });
+        } catch { /* ignore send errors */ }
+        this._flushing = false;
+        if (this._queue.length > 0) this._scheduleFlush();
+    }
+}
+
 const logger = createLogger({
     level: "info",
     format: format.combine(format.timestamp(), format.json()),
@@ -74,6 +128,7 @@ const logger = createLogger({
         new transports.File({ filename: path.join(CONFIG.logDir, "error.log"), level: "error" }),
         new transports.File({ filename: path.join(CONFIG.logDir, "agent.log") }),
         new transports.Console({ format: format.combine(format.colorize(), format.simple()) }),
+        new DiscordLogTransport(),
     ],
 });
 
@@ -239,17 +294,56 @@ async function loadSkills() {
 const AGENT_ROLE = (process.env.OPENCLAW_AGENT_ROLE || "").toLowerCase();
 const AGENT_LABEL = process.env.OPENCLAW_AGENT_LABEL || (AGENT_ROLE ? AGENT_ROLE.replace(/-/g, " ") : "0xpiclaw.eth");
 
-const BASE_PROMPT = `You are 0xpiclaw.eth, a DeFi agent on a Raspberry Pi 4. You speak English.
+const BASE_PROMPT = `You are 0xpiclaw.eth, a DeFi agent on a Raspberry Pi 4. You speak English. You are the only agent; you do everything yourself (vault discovery, strategy, execution, system checks) using your tools and skills.
 Your wallet: 0x8Ac130E606545aD94E26fCF09CcDd950A981A704. Chains: ARBITRUM_ONE, BASE, MAINNET.
+
+**When to use which tools:**
+- Use factor_* tools (factor_get_owned_vaults, factor_get_vault_info, factor_get_shares, factor_execute_*, etc.) and yield_opportunities ONLY when the user is clearly asking about vaults, DeFi, yield, strategy, Factor Protocol, or wallet positions. Do NOT call them for unrelated topics (e.g. installing software, general chat, other services, links, registration flows). For those, answer directly or use shell/list_skills/read_memory as needed.
+- For questions about Moltbook, installations, system setup, or anything not related to DeFi/vaults: respond in plain language without calling any factor_* or yield_opportunities.
+
+Your skills (full content is loaded below; use the relevant one for each task):
+- factor-mcp: Factor Protocol MCP — factor_get_owned_vaults, factor_get_vault_info, factor_get_shares, factor_get_executions, factor_get_factory_addresses, factor_list_adapters, factor_build_strategy, factor_simulate_strategy, factor_execute_strategy, factor_execute_manager, deposits/withdrawals, create vault, etc.
+- factor-strategies: Pro vaults API, canvas, building strategies from patterns.
+- factor-reference: Execute manager steps, adapter IDs, addresses from factory/vault.
+- factor-lifecycle: Create vault (templates), post-deploy, deposits/withdrawals, fees, exit.
+- factor-user-vaults-strategies: Canvas from Factor Studio API, pattern examples.
+- yield-hunting: DefiLlama yields by chain; use vault chain and address book (factor_list_adapters).
+- yield-to-strategy: From vault + yields → buildable strategy (blocks, adapters, APY).
+- openclaw-cli: OpenClaw CLI commands or curl/systemctl for this service (port 3100).
+- pi-commands: SSH, deploy, logs, systemctl for the Pi.
+- manager-skill: When to use run_subagents (parallel sub-tasks). Use list_skills to see names and content; reload_skills after adding skills.
 
 To call a tool use exactly: [TOOL_CALL:toolName:jsonObject]
 - toolName = the actual tool (e.g. factor_get_config, factor_get_owned_vaults, shell). NOT the word "name".
 - jsonObject = a JSON object, use {} for no params. Examples: [TOOL_CALL:factor_get_config:{}] or [TOOL_CALL:shell:{"command":"vcgencmd measure_temp"}]
 - For shell: [TOOL_CALL:shell:{"command":"your bash command"}] (optional: "timeout": 30000 ms). You run on the Pi; use shell to run OS commands, read files, check services, etc.
-- To add new knowledge: add_skill (create from content), add_skill_from_path (import .md from Pi filesystem), add_skill_from_url (fetch from URL). Then reload_skills so it applies. Use list_skills to see what skills you have (optionally includeContent or previewLines).
+- To add new knowledge: add_skill (create from content), add_skill_from_path (import .md from Pi filesystem), add_skill_from_url (fetch from URL). Then reload_skills so it applies.
 - To split work into one-shot sub-tasks (research, parallel checks): run_subagents with tasks array. Each task runs with your same skills and tools; you get back aggregated results. Use only when it clearly helps (e.g. "one searches, one checks vaults, one summarizes").
 - For real-time DeFi yield by chain/asset/protocol: yield_opportunities (chain?, symbol?, project?, stablecoinOnly?, minTvlUsd?, limit?). Use project for protocol (e.g. aave-v3, compound-v3). Data from DefiLlama Yields.
 `;
+
+// Telegram-only: Andrea0x as a friendly friend — casual, responsive, with real background and links.
+const TELEGRAM_PROMPT = `You are Andrea0x (Andrea). You're on Telegram as a friend: relaxed, genuine, and easy to talk to.
+
+**Your real background (use when asked who you are, work, CV, links):**
+- You're Andrea0x.eth: Blockchain Product Manager & Web3 Developer, focused on DeFi, DAO and EVM. You love DAO, DeFi & Web3; you work on techno-economic aspects of EVM and you're a daily Web3 & DeFi user (see https://www.andrea0x.me/ ).
+- Current work: Senior Product Owner at Factor.fi (since 09/2023) — leading product for Factor's DeFi strategy marketplace, building blocks, templates, community-curated strategies and automated vaults. Also Blockchain Product Owner at Gruppo Activa; freelance Consulente Blockchain & Web3 (Andrea Ritondale) since 2020. Past: Web3 Advisor MEGO TICKETS, The 300 / Country Lead Synthetix Italia, Elite & Grants Councilor Kwenta, Core Contributor & PM Jigstack, FNDZ, YOMI, Theledger.it, etc.
+- Education: Master in Management (110 cum laude, Uni Cassino), dissertation on DAO governance; Professional Scrum Master I; Blockchain Developer (Start2Impact); Erasmus Sofia; Blockchain Business Dalian (CN). Languages: Italian (native), English, Spanish, Chinese.
+- Portfolio / projects you're associated with: Factor Discover, Factor Studio, Kwenta, Kwentize, Synthetix Italia, jWallet, Jigstack, Stakbank, Lemonade, FNDZ, Gallery, Santa, etc.
+- Your links (share when someone asks where to find you): Site & CV https://www.andrea0x.me/ | Instagram https://www.instagram.com/andrea0x.eth | LinkedIn https://www.linkedin.com/in/andrea-ritondale/
+
+**Backend (don't pretend you don't have it):**
+- You run on OpenClaw on a Raspberry Pi. The same process has in-process cron jobs and heartbeat — so you DO have a "heartbeat" and scheduled tasks. If someone asks to create a cron or add something to the heartbeat, don't say you can't.
+- What already runs: heartbeat every 15 min (HEARTBEAT.md checklist), Pi system report every 30 min (Discord), Bitcoin price every 5 min (Discord, from CoinGecko). So "cron ogni 5 min con prezzo BTC" already exists and posts to Discord. If they want it here on Telegram too, say it's already running and we can add this chat to receive it (would need their chat ID in the cron).
+
+**Who you are here (tone):**
+- You're Andrea — a guy who's there when someone writes. You answer like a friend: short, warm, natural. No corporate tone, no "As an AI". You're just Andrea.
+- Match the user's language: if they write in Italian, reply in Italian; if in English, reply in English.
+- You can be funny when it fits, use a bit of slang or emoji if it feels right. Keep it real and human.
+- If they ask about DeFi, vaults, crypto, or the Pi: you still have your tools (factor_*, yield_opportunities, shell, etc.) — use them only when the question clearly needs it, then explain in a simple, friendly way. For casual chitchat, opinions, or "come stai?", just talk. No tool calls needed.
+- You don't introduce yourself as a bot or list your capabilities unless they ask. You're just Andrea, the guy on the other side of the chat.
+
+Tool usage when needed: [TOOL_CALL:toolName:jsonObject]. Same tools as in the main prompt (factor_*, shell, list_skills, read_memory, etc.). Use them only when the conversation is clearly about vaults, yield, system, or something that requires data. Otherwise reply with a normal, friendly message.`;
 
 const AGENT_ROLE_PROMPTS = {
     orchestrator: `You are the Orchestrator agent. You speak English. You run every 30 minutes to coordinate the other agents.
@@ -257,8 +351,8 @@ const AGENT_ROLE_PROMPTS = {
 Memory: Use read_memory({ "date": "YYYY-MM-DD" }) to read today or yesterday (memory/). Use append_memory({ "content": "short note" }) to record significant outcomes so future runs have context. Text over brain — write it down.
 
 Your jobs:
-1. Check vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc (Factor Pro on Arbitrum): use factor_get_vault_info, factor_get_shares, factor_get_executions to monitor its state.
-2. Trigger the DeFi Expert (agent on port 3101): use call_agent with port 3101 and a message containing the vault address, chain, current assets and positions so they can propose a yield-maximizing strategy based on Factor strategies skills.
+1. Discover which vaults to operate on: first call factor_get_owned_vaults (no params or ownerAddress) to list all vaults for the active wallet. From the result, choose which vault(s) to work on in this cycle (e.g. by TVL, last activity, or iterate over all). For each chosen vault use factor_get_vault_info, factor_get_shares, factor_get_executions to monitor its state.
+2. Trigger the DeFi Expert (agent on port 3101): use call_agent with port 3101 and a message containing the vault address(es), chain, current assets and positions so they can propose a yield-maximizing strategy based on Factor strategies skills.
 3. Trigger the Executor (agent on port 3102): use call_agent with port 3102 and the strategy or actions. The Executor must always execute real transactions (validate with simulate, then always broadcast). No human approval required.
 4. Optionally trigger the System Improver (agent on port 3103): use call_agent with port 3103 to ask for system health checks and improvement suggestions.
 
@@ -360,11 +454,12 @@ class AIEngine {
         return { text, reasoning: reasoning || null, usage };
     }
 
-    async callOpenRouter(systemPrompt, messages, retries = 1) {
+    async callOpenRouter(systemPrompt, messages, retries = 1, modelOverride = null) {
         if (!_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or create " + path.join(OPENCLAW_ROOT, ".openrouter_key"));
         const openRouterMessages = [{ role: "system", content: systemPrompt }, ...messages];
+        const model = modelOverride || CONFIG.openrouterModel;
         const body = {
-            model: CONFIG.openrouterModel,
+            model,
             messages: openRouterMessages,
             temperature: 0.7,
             max_tokens: 8192,
@@ -403,18 +498,81 @@ class AIEngine {
         return { text, reasoning: reasoning || null, usage };
     }
 
+    async callKimi(systemPrompt, messages, retries = 1) {
+        // Kimi Code — Anthropic-compatible endpoint (https://api.kimi.com/coding/v1/messages)
+        // Auth: x-api-key header + anthropic-version. Key from .kimi_key or KIMI_API_KEY.
+        if (!_kimiKey) throw new Error("Kimi not configured. Get a Kimi Code API key at https://www.kimi.com/code/console and set KIMI_API_KEY or " + path.join(OPENCLAW_ROOT, ".kimi_key"));
+
+        // Anthropic format: system is a top-level param, not a message role
+        const kimiMessages = messages.map(m => ({ role: m.role === "system" ? "user" : m.role, content: m.content }));
+        const body = {
+            model: CONFIG.kimiModel,
+            system: systemPrompt,
+            messages: kimiMessages,
+            max_tokens: 8192,
+        };
+        logger.info(`[AI] Kimi (Kimi Code agent): ${CONFIG.kimiUrl} model=${CONFIG.kimiModel}`);
+        const doCall = async () => {
+            if (AIEngine._apiLock) await AIEngine._apiLock;
+            let _resolve;
+            AIEngine._apiLock = new Promise(r => { _resolve = r; });
+            try {
+                const response = await axios.post(CONFIG.kimiUrl, body, {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-api-key": _kimiKey.trim(),
+                        "anthropic-version": "2023-06-01",
+                    },
+                });
+                return response.data;
+            } finally { _resolve(); AIEngine._apiLock = null; }
+        };
+        let data = await doCall();
+        // Anthropic response: data.content is an array of {type, text}
+        let text = "";
+        let reasoning = "";
+        if (Array.isArray(data.content)) {
+            for (const block of data.content) {
+                if (block.type === "thinking") reasoning += (block.text || block.thinking || "") + "\n";
+                else if (block.type === "text") text += block.text || "";
+            }
+        }
+        text = text.trim();
+        reasoning = reasoning.trim();
+        const usage = data.usage || {};
+        if (!text && retries > 0) {
+            await new Promise(r => setTimeout(r, 2000));
+            data = await doCall();
+            if (Array.isArray(data.content)) {
+                for (const block of data.content) {
+                    if (block.type === "thinking" && !reasoning) reasoning += (block.text || "") + "\n";
+                    else if (block.type === "text") text += block.text || "";
+                }
+                text = text.trim();
+                reasoning = reasoning.trim();
+            }
+        }
+        if (!text) usage._error = data.error?.message || "empty response";
+        return { text, reasoning: reasoning || null, usage };
+    }
+
     async chat(message, chatId = "default", systemPrompt = SYSTEM_PROMPT, { maxRounds = 10 } = {}) {
         const provider = await getAiProvider();
         const needsMinimax = provider === "minimax";
         if (needsMinimax && !MiniMaxOAuth.getBearer()) throw new Error("Not authenticated. Use /auth/minimax");
         if (provider === "openrouter" && !_openrouterKey) throw new Error("OpenRouter not configured. Set OPENROUTER_API_KEY or add " + path.join(OPENCLAW_ROOT, ".openrouter_key"));
+        if (provider === "kimi" && !_kimiKey) throw new Error("Kimi not configured. Get a Kimi Code API key at https://www.kimi.com/code/console and set " + path.join(OPENCLAW_ROOT, ".kimi_key"));
         this.addMessage(chatId, "user", message);
         const history = this.getHistory(chatId);
         logger.info(`[AI] Chat [${chatId}] (${provider}): "${message}" (${history.length} msgs)`);
 
-        const callApi = (sys, msgs) => provider === "openrouter" ? this.callOpenRouter(sys, msgs) : this.callMiniMax(sys, msgs);
-        const engineLabel = provider === "openrouter" ? "openrouter" : "minimax";
-        const modelLabel = provider === "openrouter" ? CONFIG.openrouterModel : CONFIG.minimaxModel;
+        const callApi = (sys, msgs) => {
+            if (provider === "openrouter") return this.callOpenRouter(sys, msgs);
+            if (provider === "kimi") return this.callKimi(sys, msgs);
+            return this.callMiniMax(sys, msgs);
+        };
+        const engineLabel = provider === "openrouter" ? "openrouter" : provider === "kimi" ? "kimi" : "minimax";
+        const modelLabel = provider === "openrouter" ? CONFIG.openrouterModel : provider === "kimi" ? CONFIG.kimiModel : CONFIG.minimaxModel;
 
         try {
             let result = await callApi(systemPrompt, history.map(m => ({ role: m.role, content: m.content })));
@@ -895,6 +1053,7 @@ app.post("/heartbeat", async (req, res) => {
 // Health
 app.get("/health", async (req, res) => {
     const provider = await getAiProvider();
+    const model = provider === "openrouter" ? CONFIG.openrouterModel : provider === "kimi" ? CONFIG.kimiModel : CONFIG.minimaxModel;
     res.json({
         status: "ok",
         agent: "0xpiclaw.eth",
@@ -902,14 +1061,15 @@ app.get("/health", async (req, res) => {
         uptime: process.uptime(),
         openclawRoot: OPENCLAW_ROOT,
         aiProvider: provider,
-        model: provider === "openrouter" ? CONFIG.openrouterModel : CONFIG.minimaxModel,
+        model,
         auth: { oauth: MiniMaxOAuth.hasOAuth(), expired: MiniMaxOAuth.hasOAuth() ? MiniMaxOAuth.isExpired() : null, fallbackKey: !!_minimaxKey },
         openrouterConfigured: !!_openrouterKey,
+        kimiConfigured: !!_kimiKey,
         factorMcp: factorBridge.ready,
     });
 });
 
-// AI provider switch (minimax | openrouter)
+// AI provider switch (minimax | openrouter | kimi)
 app.get("/api/ai-provider", async (req, res) => {
     try {
         const provider = await getAiProvider();
@@ -918,6 +1078,10 @@ app.get("/api/ai-provider", async (req, res) => {
             minimaxReady: !!MiniMaxOAuth.getBearer(),
             openrouterReady: !!_openrouterKey,
             openrouterModel: CONFIG.openrouterModel,
+            kimiReady: !!_kimiKey,
+            kimiModel: CONFIG.kimiModel,
+            kimiVia: "kimi-code",
+            kimiUrl: CONFIG.kimiUrl,
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -925,7 +1089,7 @@ app.get("/api/ai-provider", async (req, res) => {
 });
 app.post("/api/ai-provider", async (req, res) => {
     const { provider } = req.body;
-    if (!provider) return res.status(400).json({ error: "provider required (minimax or openrouter)" });
+    if (!provider) return res.status(400).json({ error: "provider required (minimax, openrouter, or kimi)" });
     try {
         const p = await setAiProvider(provider);
         logger.info("[AI] Provider switched to: " + p);
@@ -952,15 +1116,21 @@ app.post("/auth/minimax/refresh", async (req, res) => {
     catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Chat (MiniMax AI with tool loop)
+// Chat (MiniMax AI with tool loop). Used by: dashboard, Telegram bridge (telegram-bridge.js), Instagram webhook (/webhook/instagram).
+// On Telegram (chatId starts with "telegram-") we use TELEGRAM_PROMPT so the agent is "Andrea0x" — friendly, like a friend.
 app.post("/chat", async (req, res) => {
     const { message, chatId = "default" } = req.body;
     if (!message) return res.status(400).json({ error: "message required" });
+    const isTelegram = chatId && String(chatId).startsWith("telegram-");
+    const telegramChatIdNum = isTelegram ? String(chatId).replace("telegram-", "") : "";
+    const systemPrompt = isTelegram
+        ? TELEGRAM_PROMPT + (telegramChatIdNum ? `\n\n[Current Telegram chat_id for this conversation: ${telegramChatIdNum}. If the user asks to receive cron/BTC price here, tell them to add TELEGRAM_CHAT_ID=${telegramChatIdNum} to /opt/openclaw/config/telegram.env and restart openclaw (sudo systemctl restart openclaw).]` : "")
+        : SYSTEM_PROMPT;
     try {
         if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "user", content: message });
-        const result = await ai.chat(message, chatId);
+        const result = await ai.chat(message, chatId, systemPrompt);
         if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "assistant", content: result.response, reasoning: result.reasoning, tokens: result.tokens });
-        if (result.response && AGENT_LABEL && !(chatId === "heartbeat" || chatId.startsWith("heartbeat-"))) {
+        if (result.response && AGENT_LABEL && !(chatId === "heartbeat" || chatId.startsWith("heartbeat-")) && !isTelegram) {
             const excerpt = result.response.length > 400 ? result.response.substring(0, 397) + "..." : result.response;
             sendDiscordMessage(`[${AGENT_LABEL}] ${excerpt}`, AGENT_LABEL).catch(() => {});
         }
@@ -983,13 +1153,68 @@ app.post("/chat/clear", (req, res) => {
     res.json({ success: true });
 });
 
-// Cron: hourly yield optimizer (Aave vs Compound USDC on Arbitrum, rebalance vault)
+// ─── Instagram Messaging webhook (Meta) ──────────────────────────────────────
+// Requires: Instagram Professional account, Meta App with instagram_manage_messages.
+// Env: INSTAGRAM_VERIFY_TOKEN (for GET verification), INSTAGRAM_ACCESS_TOKEN (for sending replies).
+let _instagramVerifyToken = process.env.INSTAGRAM_VERIFY_TOKEN || "";
+let _instagramAccessToken = process.env.INSTAGRAM_ACCESS_TOKEN || "";
+try { const t = (await fs.readFile(path.join(OPENCLAW_ROOT, ".instagram_verify_token"), "utf8")).trim(); if (t) _instagramVerifyToken = t; } catch {}
+try { const t = (await fs.readFile(path.join(OPENCLAW_ROOT, ".instagram_access_token"), "utf8")).trim(); if (t) _instagramAccessToken = t; } catch {}
+
+app.get("/webhook/instagram", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && _instagramVerifyToken && token === _instagramVerifyToken && challenge) {
+        res.type("text/plain").send(challenge);
+    } else {
+        res.status(403).end();
+    }
+});
+
+app.post("/webhook/instagram", async (req, res) => {
+    res.status(200).end();
+    if (!_instagramAccessToken) return;
+    const body = req.body;
+    if (body?.object !== "instagram" || !Array.isArray(body.entry)) return;
+    for (const entry of body.entry) {
+        if (!Array.isArray(entry.messaging)) continue;
+        for (const ev of entry.messaging) {
+            const msg = ev.message;
+            if (!msg || msg.is_echo || msg.is_deleted) continue;
+            const text = msg.text || (msg.quick_reply?.payload) || "";
+            if (!text.trim()) continue;
+            const senderId = ev.sender?.id;
+            if (!senderId) continue;
+            const chatId = `instagram-${senderId}`;
+            try {
+                if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "user", content: `[IG] ${text}`, channel: "instagram" });
+                const result = await ai.chat(text.trim(), chatId);
+                const reply = (result.response || "").slice(0, 2000);
+                if (appendAgentJournal) await appendAgentJournal({ type: "chat", role: "assistant", content: reply, channel: "instagram" });
+                const r = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(_instagramAccessToken)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ recipient: { id: senderId }, message: { text: reply || "Ok." } }),
+                });
+                const data = await r.json();
+                if (data.error) logger.warn("[Instagram] Send error:", data.error);
+            } catch (e) {
+                logger.error("[Instagram] " + e.message);
+            }
+        }
+    }
+});
+
+// Cron: hourly yield optimizer (discover vaults via Factor MCP, then rebalance where applicable)
 const CRON_SECRET = process.env.CRON_SECRET || "";
 const YIELD_OPTIMIZER_PROMPT = `Run this task once:
 
-1. Call yield_opportunities with chain "Arbitrum", symbol "USDC", project "aave-v3,compound-v3", limit 15. Compare APY for USDC on Aave V3 vs Compound V3.
+1. Call factor_get_owned_vaults to list vaults for the active wallet. For each vault that is relevant (e.g. USDC denominator on Arbitrum), get factor_get_vault_info to know chain and adapters.
 
-2. Using vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc (Factor MCP): if Compound V3 USDC APY is higher than Aave V3, move funds from Aave to Compound; if Aave is higher, move from Compound to Aave. Use factor_get_vault_info and factor_execute_manager (or factor_build_strategy / factor_simulate_strategy / factor_execute_strategy) as needed. Only execute rebalance if the APY difference justifies it and you have the right adapters. Reply with a short summary: rates found, action taken (or skipped), and reason.`;
+2. Call yield_opportunities with the vault's chain (e.g. "Arbitrum"), symbol "USDC", project matching the vault's adapters (e.g. "aave-v3,compound-v3"), limit 15. Compare APY for USDC on Aave V3 vs Compound V3 (or other whitelisted protocols).
+
+3. For each vault you chose to optimize: if the APY difference between protocols justifies a rebalance, use factor_get_vault_info and factor_execute_manager (or factor_build_strategy / factor_simulate_strategy / factor_execute_strategy) as needed. Only execute rebalance if the APY difference justifies it and you have the right adapters. Reply with a short summary: vault(s), rates found, action taken (or skipped), and reason.`;
 
 app.post("/cron/yield-optimize", async (req, res) => {
     const auth = req.headers.authorization;
@@ -1012,14 +1237,14 @@ app.post("/cron/yield-optimize", async (req, res) => {
     }
 });
 
-// Orchestrator: 30-min cycle (check vault, trigger DeFi expert, Executor, System improver). Only when this instance is the orchestrator.
+// Orchestrator: 30-min cycle (discover vaults via Factor MCP, then trigger DeFi expert, Executor, System improver).
 const ORCHESTRATE_PROMPT = `Run your 30-minute cycle now. Write as much info as you can to Discord and memory.
 1. Post to Discord: "Orchestrator: Starting 30min cycle." and append_memory with cycle start.
-2. Check vault 0xbad0d504b0b03443547e65ba9bf5ca47ecf644dc (factor_get_vault_info, factor_get_shares). Post a detailed summary to Discord (TVL, shares, assets, PPS, any positions).
-3. Call the DeFi Expert (port 3101): send vault address, chain Arbitrum, current state; ask for a yield-maximizing strategy. Post their full strategy summary to Discord (steps, protocols, amounts, APY).
+2. Call factor_get_owned_vaults to list vaults for the active wallet. Choose which vault(s) to operate on in this cycle (e.g. all, or the one with most TVL / recent activity). For each chosen vault: factor_get_vault_info, factor_get_shares. Post a detailed summary to Discord (vault address, chain, TVL, shares, assets, PPS, any positions). If there are no vaults, post that and skip strategy/execution for vaults.
+3. Call the DeFi Expert (port 3101): send the vault address(es), chain, current state; ask for a yield-maximizing strategy. Post their full strategy summary to Discord (steps, protocols, amounts, APY).
 4. Call the Executor (port 3102): send the strategy. The Executor must always execute real transactions (simulate to validate, then always broadcast). Post a detailed result to Discord (steps run, amounts, tx hashes, success/failure, errors if any). Append to memory the execution outcome.
 5. Call the System Improver (port 3103): ask for system health (CPU, memory, disk, logs). Post their detailed findings to Discord.
-6. Post to Discord: "Orchestrator: Cycle complete." with a detailed overall summary (vault state, what was executed, any issues). Append to memory the cycle result.`;
+6. Post to Discord: "Orchestrator: Cycle complete." with a detailed overall summary (vault(s) state, what was executed, any issues). Append to memory the cycle result.`;
 
 app.post("/cron/orchestrate", async (req, res) => {
     if (AGENT_ROLE !== "orchestrator") return res.status(404).json({ error: "Not the orchestrator" });
@@ -1054,7 +1279,8 @@ app.get("/factor/tools", async (req, res) => {
 app.listen(CONFIG.port, "0.0.0.0", async () => {
     const provider = await getAiProvider();
     logger.info(`0xpiclaw.eth running on :${CONFIG.port}`);
-    logger.info(`AI provider: ${provider} | MiniMax: OAuth=${MiniMaxOAuth.hasOAuth()}, Key=${!!_minimaxKey} | OpenRouter: ${!!_openrouterKey}`);
+    logger.info(`AI provider: ${provider} | MiniMax: OAuth=${MiniMaxOAuth.hasOAuth()}, Key=${!!_minimaxKey} | OpenRouter: ${!!_openrouterKey} | Kimi: ${!!_kimiKey}`);
+    if (_instagramVerifyToken && _instagramAccessToken) logger.info("Instagram webhook: enabled (POST /webhook/instagram)"); else if (_instagramVerifyToken || _instagramAccessToken) logger.warn("Instagram: set both INSTAGRAM_VERIFY_TOKEN and INSTAGRAM_ACCESS_TOKEN to enable");
     const ok = await factorBridge.start();
     logger.info(`Factor MCP: ${ok ? "connected" : "not available"}`);
     startCronJobs({

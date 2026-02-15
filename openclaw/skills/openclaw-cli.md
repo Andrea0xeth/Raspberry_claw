@@ -4,12 +4,12 @@ Reference: [OpenClaw CLI](https://docs.openclaw.ai/cli). Use this when the **Ope
 
 ---
 
-## When to use CLI vs our agents
+## When to use CLI vs this agent
 
-- **Our 4 agents** (this setup): Express servers on ports 3100–3103. Manage with: `curl http://127.0.0.1:3100/health`, `systemctl status openclaw openclaw-agent2 openclaw-agent3 openclaw-agent4`, `journalctl -u openclaw -n 50`.
+- **This agent** (single OpenClaw instance): Express server on port 3100. Manage with: `curl http://127.0.0.1:3100/health`, `systemctl status openclaw`, `journalctl -u openclaw -n 50`.
 - **Official OpenClaw Gateway** (if installed): single Gateway process, often port 18789. Manage with: `openclaw gateway status`, `openclaw health`, `openclaw cron list`, `openclaw channels status`.
 
-If both exist, use the CLI for the Gateway and curl/systemctl for our 4 agents.
+If both exist, use the CLI for the Gateway and curl/systemctl for this agent.
 
 ---
 
@@ -77,14 +77,14 @@ Run as the user that runs the gateway (e.g. `openclaw` or `pi`). Use `[TOOL_CALL
 
 ---
 
-## Our 4-agent stack (no OpenClaw Gateway)
+## Single-agent stack (no OpenClaw Gateway)
 
-When managing **this** setup (Raspberry_claw agents on 3100–3103):
+When managing **this** setup (single agent on port 3100):
 
-1. **Health**: `curl -s http://127.0.0.1:3100/health` (and 3101, 3102, 3103).
+1. **Health**: `curl -s http://127.0.0.1:3100/health`.
 2. **Heartbeat**: `curl -s http://127.0.0.1:3100/heartbeat` (GET) or POST with checklist.
-3. **Cron**: Our cron runs inside each process (see cron-jobs.js); no `openclaw cron` for these. To trigger: `curl -s -X POST http://127.0.0.1:3100/cron/orchestrate -H "Content-Type: application/json"` (and optional `Authorization: Bearer CRON_SECRET`).
-4. **Services**: `sudo systemctl status openclaw openclaw-agent2 openclaw-agent3 openclaw-agent4`, `sudo systemctl restart openclaw openclaw-agent2 openclaw-agent3 openclaw-agent4`.
-5. **Logs**: `journalctl -u openclaw -n 100 --no-pager` (and `-u openclaw-agent2`, etc.).
+3. **Cron**: In-process cron (see cron-jobs.js) if configured. Optional: `curl -s -X POST http://127.0.0.1:3100/cron/orchestrate -H "Content-Type: application/json"` (and optional `Authorization: Bearer CRON_SECRET`) if that endpoint is enabled.
+4. **Services**: `sudo systemctl status openclaw`, `sudo systemctl restart openclaw`.
+5. **Logs**: `journalctl -u openclaw -n 100 --no-pager`.
 
-Use the **OpenClaw CLI** when the user has installed it (e.g. for a separate Gateway or for memory/channels tied to that install). Use **curl + systemctl** for our four agents.
+Use the **OpenClaw CLI** when the user has installed it (e.g. for a separate Gateway). Use **curl + systemctl** for this agent.

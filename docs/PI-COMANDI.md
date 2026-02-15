@@ -44,6 +44,73 @@ journalctl -u openclaw -n 200 --no-pager | grep -i factor
 
 ---
 
+## Telegram (bridge)
+
+Il bridge inoltra i messaggi Telegram all’agente (`POST /chat`) e invia la risposta in chat. Per riattivarlo:
+
+**1. Sul Pi: copia il bridge e il servizio**
+
+Dopo aver sincronizzato il repo (o da cartella del repo sul Pi):
+
+```bash
+# Copia script e unit
+sudo cp openclaw/src/telegram-bridge.js /opt/openclaw/src/
+sudo cp config/systemd/piclaw-telegram.service /etc/systemd/system/
+sudo chown openclaw:openclaw /opt/openclaw/src/telegram-bridge.js
+```
+
+**2. Imposta il token del bot**
+
+Crea il bot con [@BotFather](https://t.me/BotFather), poi sul Pi:
+
+```bash
+sudo mkdir -p /opt/openclaw/config
+echo 'TELEGRAM_BOT_TOKEN=123456:ABC...' | sudo tee /opt/openclaw/config/telegram.env
+sudo chown openclaw:openclaw /opt/openclaw/config/telegram.env
+sudo chmod 600 /opt/openclaw/config/telegram.env
+```
+
+**3. Avvia e abilita il servizio**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable piclaw-telegram
+sudo systemctl start piclaw-telegram
+sudo systemctl status piclaw-telegram
+```
+
+Log: `journalctl -u piclaw-telegram -f`
+
+**Ricevere il prezzo BTC ogni 5 min su Telegram:** c’è già un cron che manda il prezzo a Discord. Per riceverlo anche qui, chiedi al bot su Telegram «manda il prezzo BTC qui»: ti dirà il tuo `chat_id`. Poi sul Pi aggiungi in `/opt/openclaw/config/telegram.env` la riga `TELEGRAM_CHAT_ID=IL_TUO_CHAT_ID`, copia il unit aggiornato `openclaw.service` (con `EnvironmentFile=-/opt/openclaw/config/telegram.env`) in `/etc/systemd/system/`, `sudo systemctl daemon-reload` e `sudo systemctl restart openclaw`. Da allora il cron BTC invierà anche a questa chat.
+
+---
+
+## Instagram (webhook in OpenClaw)
+
+L’agente può rispondere ai messaggi DM su Instagram tramite **Instagram Messaging API** (Meta). Il webhook è gestito direttamente da OpenClaw (`GET/POST /webhook/instagram`).
+
+**Requisiti:** account Instagram **Professional** (Business o Creator), app su [developers.facebook.com](https://developers.facebook.com) con permessi `instagram_basic` e `instagram_manage_messages`. Per messaggi da utenti qualsiasi serve **Advanced Access** (App Review).
+
+**1. Crea un’app Meta** e aggiungi il prodotto **Instagram** > Instagram Messaging. Ottieni un **Page Access Token** (o token per l’account Instagram) con permesso di inviare messaggi.
+
+**2. Sul Pi: token di verifica e token di accesso**
+
+```bash
+# Scegli una stringa segreta per la verifica webhook (es. una password casuale)
+echo 'LA_TUA_STRINGA_VERIFY' | sudo tee /opt/openclaw/.instagram_verify_token
+# Incolla il token di accesso Meta (Page/Instagram token)
+echo 'EAAxxxx...' | sudo tee /opt/openclaw/.instagram_access_token
+sudo chown openclaw:openclaw /opt/openclaw/.instagram_verify_token /opt/openclaw/.instagram_access_token
+sudo chmod 600 /opt/openclaw/.instagram_verify_token /opt/openclaw/.instagram_access_token
+sudo systemctl restart openclaw
+```
+
+**3. Nel pannello Meta:** Webhooks > Configura > URL callback: `https://TUO_DOMINIO/webhook/instagram` (es. `https://piclaw.supasoft.xyz/webhook/instagram` se il tunnel punta alla porta 3100). Token di verifica = la stessa stringa di `.instagram_verify_token`. Sottoscrivi il campo **messages** per Instagram.
+
+**4. Collega** l’account Instagram Professional all’app e abilita la ricezione messaggi. Da quel momento i DM inviati al tuo profilo Instagram vengono inoltrati all’agente e la risposta viene inviata in chat.
+
+---
+
 ## API OpenClaw (localhost sul Pi)
 
 ```bash
@@ -138,8 +205,8 @@ L’utente `openclaw` potrà eseguire solo: `systemctl start|stop|restart|status
 # Sync cartella openclaw (src, skills, public)
 rsync -az -e "ssh -p 2222" openclaw/ pi@piclaw:Raspberry_claw/openclaw/
 
-# Copia in /opt/openclaw e riavvia
-ssh -p 2222 pi@piclaw "sudo cp Raspberry_claw/openclaw/src/index.js Raspberry_claw/openclaw/src/dashboard-routes.js /opt/openclaw/src/ && sudo cp -r Raspberry_claw/openclaw/skills/* /opt/openclaw/skills/ && sudo cp -r Raspberry_claw/openclaw/public/* /opt/openclaw/public/ && sudo chown -R openclaw:openclaw /opt/openclaw/src /opt/openclaw/skills /opt/openclaw/public && sudo systemctl restart openclaw"
+# Copia in /opt/openclaw e riavvia (include telegram-bridge.js)
+ssh -p 2222 pi@piclaw "sudo cp Raspberry_claw/openclaw/src/index.js Raspberry_claw/openclaw/src/dashboard-routes.js Raspberry_claw/openclaw/src/telegram-bridge.js /opt/openclaw/src/ && sudo cp -r Raspberry_claw/openclaw/skills/* /opt/openclaw/skills/ && sudo cp -r Raspberry_claw/openclaw/public/* /opt/openclaw/public/ && sudo chown -R openclaw:openclaw /opt/openclaw/src /opt/openclaw/skills /opt/openclaw/public && sudo systemctl restart openclaw"
 ```
 
 ---

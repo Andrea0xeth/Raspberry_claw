@@ -2,7 +2,7 @@
 
 **Goal:** From a vault, produce **concretely buildable strategies** (blocks + adapters + APY) using available yields on the chain and patterns supported by the vault. Everything must be based on: **chain**, **address book** (adapter whitelist), **vault canvas/pattern**, and **DefiLlama yields** filtered for those protocols.
 
-Use this skill when asked "best yield for this vault", "propose a strategy", "optimize the vault", or when the orchestrator asks the DeFi Expert for a yield-maximizing strategy.
+Use this skill when asked "best yield for this vault", "propose a strategy", "optimize the vault", or for a yield-maximizing strategy.
 
 ---
 

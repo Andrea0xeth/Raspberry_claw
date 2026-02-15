@@ -43,6 +43,13 @@ logs/
 *.bak
 *.backup
 
+# OpenClaw AI keys (use on Pi or keep local; do not commit)
+.openrouter_key
+.kimi_key
+**/telegram.env
+.instagram_verify_token
+.instagram_access_token
+
 # Factor MCP locale (copia da ~/.factor-mcp: config e wallet restano fuori da git)
 local/factor-mcp/config.json
 local/factor-mcp/wallets/
