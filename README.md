@@ -119,6 +119,7 @@ Raspberry_claw/
 | [docs/OPENCLAW-FACTOR-SETUP.md](docs/OPENCLAW-FACTOR-SETUP.md) | Factor MCP, wallet, single-agent |
 | [docs/PI-COMANDI.md](docs/PI-COMANDI.md) | Pi commands (Italian): systemctl, Telegram, Instagram, deploy |
 | [docs/OPENCLAW-CRON.md](docs/OPENCLAW-CRON.md) | Cron and heartbeat |
+| [docs/CLAUDE-CODE-CLI-PI-PLAN.md](docs/CLAUDE-CODE-CLI-PI-PLAN.md) | Plan: Claude Code CLI as headless agent on Pi (cron, memory, OpenClaw-style) |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and fixes |
 | [docs/ENV-VARS.md](docs/ENV-VARS.md) | Environment variables and secrets (Discord, Telegram, AI keys) |
 

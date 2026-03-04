@@ -1,0 +1,12 @@
+# Claude Code Agent — heartbeat (stile OpenClaw)
+# Install: sudo cp config/cron.d/claude-agent /etc/cron.d/claude-agent && sudo chmod 644 /etc/cron.d/claude-agent
+# Requisiti: Claude Code CLI installato, ~/.claude-code-agent/ configurato, utente openclaw
+# Ogni 30 min: heartbeat checklist (HEARTBEAT.md)
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Heartbeat ogni 30 min (usa utente openclaw per coerenza con Raspberry Claw)
+*/30 * * * * openclaw CLAUDE_AGENT_ROOT=/home/openclaw/.claude-code-agent /home/openclaw/.claude-code-agent/claude-agent-runner.sh heartbeat >> /home/openclaw/.claude-code-agent/logs/cron.log 2>&1
+
+# Report mattutino alle 7:30 (opzionale)
+# 30 7 * * * openclaw CLAUDE_AGENT_ROOT=/home/openclaw/.claude-code-agent /home/openclaw/.claude-code-agent/claude-agent-runner.sh morning >> /home/openclaw/.claude-code-agent/logs/cron.log 2>&1
