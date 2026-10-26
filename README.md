@@ -115,9 +115,12 @@ Raspberry_claw/
 
 | Doc | Description |
 |-----|-------------|
+| [docs/AGENT-HANDOFF.md](docs/AGENT-HANDOFF.md) | **Start here for another agent:** all access channels + ops map |
 | [README.it.md](README.it.md) | Full setup (Italian): SSH, SSD, OpenClaw, Ollama, remote access |
+| [docs/PI-INVENTORY.md](docs/PI-INVENTORY.md) | Live Pi layout: OS, paths, services, workers |
 | [docs/OPENCLAW-FACTOR-SETUP.md](docs/OPENCLAW-FACTOR-SETUP.md) | Factor MCP, wallet, single-agent |
 | [docs/PI-COMANDI.md](docs/PI-COMANDI.md) | Pi commands (Italian): systemctl, Telegram, Instagram, deploy |
+| [docs/ACCESSO-REMOTO.md](docs/ACCESSO-REMOTO.md) | Remote access: Meshnet vs port forwarding |
 | [docs/OPENCLAW-CRON.md](docs/OPENCLAW-CRON.md) | Cron and heartbeat |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and fixes |
 | [docs/ENV-VARS.md](docs/ENV-VARS.md) | Environment variables and secrets (Discord, Telegram, AI keys) |
